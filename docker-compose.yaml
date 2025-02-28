@@ -79,3 +79,16 @@ services:
       - ./utils:/app/utils
       # Mount the transaction_verification/src directory in the current directory to the /app/transaction_verification/src directory in the container
       - ./transaction_verification/src:/app/transaction_verification/src
+  logger:
+    build:
+      context: ./
+      dockerfile: ./logger/Dockerfile
+    ports:
+      - 50054:50054
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/logger/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./logger/src:/app/logger/src
+      - ./logs:/app/logger/src/logs

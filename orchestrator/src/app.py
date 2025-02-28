@@ -14,20 +14,22 @@ import fraud_detection_pb2_grpc as fraud_detection_grpc
 
 transaction_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/transaction_verification'))
 sys.path.insert(0, transaction_grpc_path)
-
 import transaction_verification_pb2 as transaction_verification
 import transaction_verification_pb2_grpc as transaction_verification_grpc
 
 
+logger_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/logger'))
+sys.path.insert(0, logger_grpc_path)
+import logger_pb2 as logger
+import logger_pb2_grpc as logger_grpc
 
-def greet(name='you'):
-    # Establish a connection with the fraud-detection gRPC service.
-    with grpc.insecure_channel('fraud_detection:50051') as channel:
-        # Create a stub object.
-        stub = fraud_detection_grpc.HelloServiceStub(channel)
-        # Call the service through the stub object.
-        response = stub.SayHello(fraud_detection.HelloRequest(name=name))
-    return response.greeting
+def log(message, context=None):
+    with grpc.insecure_channel('logger:50054') as channel:
+        stub = logger_grpc.LoggerServiceStub(channel)
+        request = logger.LogRequest(message=message)
+        response = stub.Log(request, context)
+    return (response.message, response.isLogged)
+
 
 # Import Flask.
 # Flask is a web framework for Python.
@@ -49,7 +51,7 @@ def index():
     Responds with 'Hello, [name]' when a GET request is made to '/' endpoint.
     """
     # Test the fraud-detection gRPC service.
-    response = greet(name='orchestrator')
+    response = log("yo")
     # Return the response.
     return response
 
