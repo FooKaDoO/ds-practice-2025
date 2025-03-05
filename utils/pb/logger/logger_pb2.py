@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0clogger.proto\x12\x06logger\"\x1d\n\nLogRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"0\n\x0bLogResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x10\n\x08isLogged\x18\x02 \x01(\x08\x32?\n\rLoggerService\x12.\n\x03Log\x12\x12.logger.LogRequest\x1a\x13.logger.LogResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0clogger.proto\x12\x06logger\"\x1d\n\nLogRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\"\r\n\x0bLogResponse2\xe1\x01\n\rLoggerService\x12\x32\n\x07LogInfo\x12\x12.logger.LogRequest\x1a\x13.logger.LogResponse\x12\x33\n\x08LogDebug\x12\x12.logger.LogRequest\x1a\x13.logger.LogResponse\x12\x32\n\x07LogWarn\x12\x12.logger.LogRequest\x1a\x13.logger.LogResponse\x12\x33\n\x08LogError\x12\x12.logger.LogRequest\x1a\x13.logger.LogResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -24,7 +24,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_LOGREQUEST']._serialized_start=24
   _globals['_LOGREQUEST']._serialized_end=53
   _globals['_LOGRESPONSE']._serialized_start=55
-  _globals['_LOGRESPONSE']._serialized_end=103
-  _globals['_LOGGERSERVICE']._serialized_start=105
-  _globals['_LOGGERSERVICE']._serialized_end=168
+  _globals['_LOGRESPONSE']._serialized_end=68
+  _globals['_LOGGERSERVICE']._serialized_start=71
+  _globals['_LOGGERSERVICE']._serialized_end=296
 # @@protoc_insertion_point(module_scope)

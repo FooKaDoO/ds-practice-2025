@@ -15,8 +15,23 @@ class LoggerServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Log = channel.unary_unary(
-                '/logger.LoggerService/Log',
+        self.LogInfo = channel.unary_unary(
+                '/logger.LoggerService/LogInfo',
+                request_serializer=logger__pb2.LogRequest.SerializeToString,
+                response_deserializer=logger__pb2.LogResponse.FromString,
+                )
+        self.LogDebug = channel.unary_unary(
+                '/logger.LoggerService/LogDebug',
+                request_serializer=logger__pb2.LogRequest.SerializeToString,
+                response_deserializer=logger__pb2.LogResponse.FromString,
+                )
+        self.LogWarn = channel.unary_unary(
+                '/logger.LoggerService/LogWarn',
+                request_serializer=logger__pb2.LogRequest.SerializeToString,
+                response_deserializer=logger__pb2.LogResponse.FromString,
+                )
+        self.LogError = channel.unary_unary(
+                '/logger.LoggerService/LogError',
                 request_serializer=logger__pb2.LogRequest.SerializeToString,
                 response_deserializer=logger__pb2.LogResponse.FromString,
                 )
@@ -26,9 +41,27 @@ class LoggerServiceServicer(object):
     """Our new gRPC service name
     """
 
-    def Log(self, request, context):
+    def LogInfo(self, request, context):
         """The method the Orchestrator will call
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LogDebug(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LogWarn(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LogError(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -36,8 +69,23 @@ class LoggerServiceServicer(object):
 
 def add_LoggerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Log': grpc.unary_unary_rpc_method_handler(
-                    servicer.Log,
+            'LogInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogInfo,
+                    request_deserializer=logger__pb2.LogRequest.FromString,
+                    response_serializer=logger__pb2.LogResponse.SerializeToString,
+            ),
+            'LogDebug': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogDebug,
+                    request_deserializer=logger__pb2.LogRequest.FromString,
+                    response_serializer=logger__pb2.LogResponse.SerializeToString,
+            ),
+            'LogWarn': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogWarn,
+                    request_deserializer=logger__pb2.LogRequest.FromString,
+                    response_serializer=logger__pb2.LogResponse.SerializeToString,
+            ),
+            'LogError': grpc.unary_unary_rpc_method_handler(
+                    servicer.LogError,
                     request_deserializer=logger__pb2.LogRequest.FromString,
                     response_serializer=logger__pb2.LogResponse.SerializeToString,
             ),
@@ -53,7 +101,7 @@ class LoggerService(object):
     """
 
     @staticmethod
-    def Log(request,
+    def LogInfo(request,
             target,
             options=(),
             channel_credentials=None,
@@ -63,7 +111,58 @@ class LoggerService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/logger.LoggerService/Log',
+        return grpc.experimental.unary_unary(request, target, '/logger.LoggerService/LogInfo',
+            logger__pb2.LogRequest.SerializeToString,
+            logger__pb2.LogResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def LogDebug(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/logger.LoggerService/LogDebug',
+            logger__pb2.LogRequest.SerializeToString,
+            logger__pb2.LogResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def LogWarn(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/logger.LoggerService/LogWarn',
+            logger__pb2.LogRequest.SerializeToString,
+            logger__pb2.LogResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def LogError(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/logger.LoggerService/LogError',
             logger__pb2.LogRequest.SerializeToString,
             logger__pb2.LogResponse.FromString,
             options, channel_credentials,

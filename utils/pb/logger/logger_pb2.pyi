@@ -11,9 +11,5 @@ class LogRequest(_message.Message):
     def __init__(self, message: _Optional[str] = ...) -> None: ...
 
 class LogResponse(_message.Message):
-    __slots__ = ("message", "isLogged")
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    ISLOGGED_FIELD_NUMBER: _ClassVar[int]
-    message: str
-    isLogged: bool
-    def __init__(self, message: _Optional[str] = ..., isLogged: bool = ...) -> None: ...
+    __slots__ = ()
+    def __init__(self) -> None: ...

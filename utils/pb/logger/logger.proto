@@ -5,7 +5,10 @@ package logger;
 // Our new gRPC service name
 service LoggerService {
     // The method the Orchestrator will call
-    rpc Log (LogRequest) returns (LogResponse);
+    rpc LogInfo(LogRequest) returns (LogResponse);
+    rpc LogDebug(LogRequest) returns (LogResponse);
+    rpc LogWarn(LogRequest) returns (LogResponse);
+    rpc LogError(LogRequest) returns (LogResponse);
 }
 
 // The request message
@@ -13,8 +16,4 @@ message LogRequest {
     string message = 1;
 }
 
-// The response message
-message LogResponse {
-    string message = 1;
-    bool isLogged = 2;
-}
+message LogResponse {}
