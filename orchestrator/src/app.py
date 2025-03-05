@@ -1,13 +1,15 @@
-import sys
-import os
 import grpc
 
-# This set of lines are needed to import the gRPC stubs.
-# The path of the stubs is relative to the current file, or absolute inside the container.
-# Change these lines only if strictly needed.
+import sys
+import os
+import threading
+
+
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
 fraud_detection_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/fraud_detection'))
+
 sys.path.insert(0, fraud_detection_grpc_path)
+
 import fraud_detection_pb2 as fraud_detection
 import fraud_detection_pb2_grpc as fraud_detection_grpc
 
@@ -17,6 +19,12 @@ sys.path.insert(0, transaction_grpc_path)
 import transaction_verification_pb2 as transaction_verification
 import transaction_verification_pb2_grpc as transaction_verification_grpc
 
+
+suggestions_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/suggestions'))
+sys.path.insert(0, suggestions_grpc_path)
+
+import suggestions_pb2 as suggestions
+import suggestions_pb2_grpc as suggestions_grpc
 
 logger_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/logger'))
 sys.path.insert(0, logger_grpc_path)
@@ -29,7 +37,6 @@ def log(message, context=None):
         request = logger.LogRequest(message=message)
         response = stub.Log(request, context)
     return (response.message, response.isLogged)
-
 
 # Import Flask.
 # Flask is a web framework for Python.
@@ -105,6 +112,23 @@ def call_transaction_verification(order_data, result_dict):
     result_dict['transaction_ok'] = response.valid
     result_dict['transaction_reason'] = response.reason
 
+def call_suggestions(order_data, result_dict):
+    """
+    Calls the Suggestions microservice and updates result_dict.
+    """
+    with grpc.insecure_channel('suggestions:50053') as channel:
+        stub = suggestions_grpc.SuggestionsServiceStub(channel)
+
+        request_proto = suggestions.SuggestionsRequest(
+            items=[suggestions.Item(name=item["name"], quantity=item["quantity"]) for item in order_data.get('items', [])]
+        )
+
+        response = stub.GetBookSuggestions(request_proto)
+
+    print(f"[Orchestrator] Suggestions received: {len(response.books)} books.")
+    result_dict['suggested_books'] = [
+        {"bookId": book.bookId, "title": book.title, "author": book.author} for book in response.books
+    ]
 
 @app.route('/checkout', methods=['POST'])
 def checkout():
@@ -116,17 +140,24 @@ def checkout():
     # Print request object data
     print("Request Data:", request_data.get('items'))
 
-
-
-
     # We'll store partial results here
     result_dict = {}
 
-    # Call fraud detection
-    call_fraud_detection(request_data, result_dict)
+    fraud_thread = threading.Thread(target=call_fraud_detection, args=(request_data, result_dict))
+    transaction_thread = threading.Thread(target=call_transaction_verification, args=(request_data, result_dict))
+    suggestions_thread = threading.Thread(target=call_suggestions, args=(request_data, result_dict))
 
-    # Call transaction verification
-    call_transaction_verification(request_data, result_dict)
+
+    # Start all threads
+    fraud_thread.start()
+    transaction_thread.start()
+    suggestions_thread.start()
+
+    # Wait for all threads to complete
+    fraud_thread.join()
+    transaction_thread.join()
+    suggestions_thread.join()
+
 
     # Decide if order is approved or not
     if result_dict.get('isFraud'):
@@ -135,11 +166,7 @@ def checkout():
         suggested_books = []
     else:
         final_status = 'Order Approved'
-        # Dummy suggestion data
-        suggested_books = [
-            {'bookId': '123', 'title': 'A Great Novel', 'author': 'Someone'},
-            {'bookId': '456', 'title': 'Another Book', 'author': 'Author 2'}
-        ]
+        suggested_books = result_dict.get('suggested_books', [])
 
     # Build the final JSON response
     # matching bookstore.yaml -> OrderStatusResponse

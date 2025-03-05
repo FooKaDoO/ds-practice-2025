@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package suggestions;
+
+// Service definition
+service SuggestionsService {
+    rpc GetBookSuggestions (SuggestionsRequest) returns (SuggestionsResponse);
+}
+
+// Request message (we will use the items ordered to suggest similar books)
+message SuggestionsRequest {
+    repeated Item items = 1;
+}
+
+// Item message (each item in the order)
+message Item {
+    string name = 1;
+    int32 quantity = 2;
+}
+
+// Response message (list of suggested books)
+message SuggestionsResponse {
+    repeated Book books = 1;
+}
+
+// Book message (represents a suggested book)
+message Book {
+    string bookId = 1;
+    string title = 2;
+    string author = 3;
+}
