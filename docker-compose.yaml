@@ -101,3 +101,16 @@ services:
       - ./utils:/app/utils
       # Mount the suggestions/src directory in the current directory to the /app/suggestions/src directory in the container
       - ./suggestions/src:/app/suggestions/src
+  logger:
+    build:
+      context: ./
+      dockerfile: ./logger/Dockerfile
+    ports:
+      - 50054:50054
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/logger/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./logger/src:/app/logger/src
+      - ./logs:/app/logger/src/logs
