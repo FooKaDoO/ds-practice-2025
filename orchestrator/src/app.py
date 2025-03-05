@@ -31,11 +31,11 @@ sys.path.insert(0, logger_grpc_path)
 import logger_pb2 as logger
 import logger_pb2_grpc as logger_grpc
 
-def log(message, context=None):
+def log(message):
     with grpc.insecure_channel('logger:50054') as channel:
         stub = logger_grpc.LoggerServiceStub(channel)
         request = logger.LogRequest(message=message)
-        response = stub.Log(request, context)
+        response = stub.Log(request)
     return (response.message, response.isLogged)
 
 # Import Flask.

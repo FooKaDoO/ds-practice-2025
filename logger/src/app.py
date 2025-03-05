@@ -39,13 +39,13 @@ class LoggerServiceServicer(logger_grpc.LoggerServiceServicer):
         if not request:
             response.message = "Not logged. No request object."
             response.isLogged = False
-            print(f"[Logger Service] Log failed.")
+            print(f"[Logger Service] Log failed. No request object.")
             return response
             
         if not request.message or len(request.message) == 0:
             response.message = "Not logged. No log message."
             response.isLogged = False
-            print(f"[Logger Service] Log failed.")
+            print(f"[Logger Service] Log failed. No log message.")
             return response
 
         try:
@@ -56,8 +56,8 @@ class LoggerServiceServicer(logger_grpc.LoggerServiceServicer):
         except Exception as e:
             response.message = f"Not logged. {e}"
             response.isLogged = False
-            print(f"[Logger Service] Log failed.")
-        
+            print(f"[Logger Service] Log failed. {e}")
+
         return response
 
 def serve():
