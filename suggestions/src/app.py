@@ -2,6 +2,8 @@ import sys
 import os
 import grpc
 from concurrent import futures
+import cohere
+
 
 # Import the generated gRPC stubs
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
@@ -11,44 +13,48 @@ sys.path.insert(0, suggestions_grpc_path)
 import suggestions_pb2 as sug_pb2
 import suggestions_pb2_grpc as sug_pb2_grpc
 
+co = cohere.Client(os.getenv("COHERE_API_KEY"))
+
 class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
     """
     Implements the SuggestionsService gRPC methods.
     """
-
     def GetBookSuggestions(self, request, context):
-        """
-        Suggest books based on the items in the order.
-        """
+        items_ordered = [f"{i.name} (x{i.quantity})" for i in request.items]
+        prompt = f"User ordered these books: {', '.join(items_ordered)}. Suggest 3 new similar books in separate lines."
 
-        # Dummy book database
-        book_recommendations = {
-            "Book A": [
-                {"bookId": "101", "title": "The Sequel to Book A", "author": "Author A"},
-                {"bookId": "102", "title": "A Similar Book", "author": "Author X"}
-            ],
-            "Book B": [
-                {"bookId": "201", "title": "Another Great Read", "author": "Author B"},
-                {"bookId": "202", "title": "Something You'll Love", "author": "Author Y"}
-            ]
-        }
+        try:
+            response = co.generate(
+                model='command-r-plus',
+                prompt=prompt,
+                max_tokens=100,
+                temperature=1.0,
+                k=0,
+                p=0.75
+            )
 
-        suggested_books = []
-        for item in request.items:
-            if item.name in book_recommendations:
-                suggested_books.extend(book_recommendations[item.name])
+            # The returned text
+            suggestions_text = response.generations[0].text.strip()
+            print(f"[Suggestions Service] Cohere suggestions: {suggestions_text}")
 
-        # Create response
-        response = sug_pb2.SuggestionsResponse()
-        for book in suggested_books:
-            book_proto = response.books.add()
-            book_proto.bookId = book["bookId"]
-            book_proto.title = book["title"]
-            book_proto.author = book["author"]
+            # Convert the text to a structured list of Book objects
+            # For a quick hack, we'll just split lines
+            lines = suggestions_text.split('\n')
+            response_proto = sug_pb2.SuggestionsResponse()
+            for idx, line in enumerate(lines[:3], start=1):
+                if line.strip():
+                    book_proto = response_proto.books.add()
+                    book_proto.bookId = f"Cohere-{idx}"
+                    book_proto.title = line.strip()[:50]
+                    book_proto.author = "Cohere AI"
+            
+            print(f"[Suggestions Service] Returning {len(response_proto.books)} suggestions.")
+            return response_proto
 
-        print(f"[Suggestions Service] Suggested {len(suggested_books)} books.")
-        return response
-
+        except Exception as e:
+            print(f"Cohore error API error: {e}")
+            return sug_pb2.SuggestionsResponse()
+                
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     sug_pb2_grpc.add_SuggestionsServiceServicer_to_server(

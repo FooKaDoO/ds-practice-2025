@@ -6,8 +6,7 @@ import fraud_detection_pb2 as fraud__detection__pb2
 
 
 class FraudDetectionServiceStub(object):
-    """Our new gRPC service name
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -23,12 +22,10 @@ class FraudDetectionServiceStub(object):
 
 
 class FraudDetectionServiceServicer(object):
-    """Our new gRPC service name
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def CheckOrder(self, request, context):
-        """The method the Orchestrator will call
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -49,8 +46,7 @@ def add_FraudDetectionServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class FraudDetectionService(object):
-    """Our new gRPC service name
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def CheckOrder(request,

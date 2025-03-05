@@ -73,24 +73,26 @@ def calculate_order_total(items):
     return total
 
 def call_fraud_detection(order_data, result_dict):
-    """
-    Sends a gRPC request to the Fraud Detection microservice,
-    and stores the result in result_dict['fraud'] = True/False.
-    """
     total_amount = calculate_order_total(order_data.get('items', []))
 
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub = fraud_detection_grpc.FraudDetectionServiceStub(channel)
 
         # Prepare the request
-        request_proto = fraud_detection.CheckOrderRequest(totalAmount=total_amount)
+        request_proto = fraud_detection.CheckOrderRequest(
+            totalAmount=total_amount,
+            items=[
+                fraud_detection.Item(name=i["name"], quantity=i["quantity"]) 
+                for i in order_data.get('items', [])
+            ]
+        )
 
-        # Call the remote method
         response = stub.CheckOrder(request_proto)
 
     print(f"[Orchestrator] Fraud detection response: isFraud={response.isFraud}, reason={response.reason}")
     result_dict['isFraud'] = response.isFraud
     result_dict['fraudReason'] = response.reason
+
 
 def call_transaction_verification(order_data, result_dict):
     """
