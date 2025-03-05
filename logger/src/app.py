@@ -42,22 +42,22 @@ class LoggerServiceServicer(logger_grpc.LoggerServiceServicer):
             print(f"[Logger Service] Log failed.")
             return response
             
-        if (not request.message or len(request.message) == 0) and not context:
-            response.message = "Not logged. No log message or context."
+        if not request.message or len(request.message) == 0:
+            response.message = "Not logged. No log message."
             response.isLogged = False
             print(f"[Logger Service] Log failed.")
             return response
 
         try:
-            logging.log(level=0, msg=request.message, context=context)
+            logging.info(msg=request.message)
             response.message = "Logged."
             response.isLogged = True
             print(f"[Logger Service] Log success.")
-        except:
-            response.message = "Not logged. Problem in writing to file."
+        except Exception as e:
+            response.message = f"Not logged. {e}"
             response.isLogged = False
             print(f"[Logger Service] Log failed.")
-
+        
         return response
 
 def serve():
