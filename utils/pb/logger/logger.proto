@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package logger;
+
+// Our new gRPC service name
+service LoggerService {
+    // The method the Orchestrator will call
+    rpc LogInfo(LogRequest) returns (LogResponse);
+    rpc LogDebug(LogRequest) returns (LogResponse);
+    rpc LogWarn(LogRequest) returns (LogResponse);
+    rpc LogError(LogRequest) returns (LogResponse);
+}
+
+// The request message
+message LogRequest {
+    string message = 1;
+}
+
+message LogResponse {}

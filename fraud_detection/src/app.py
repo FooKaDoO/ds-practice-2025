@@ -10,6 +10,10 @@ sys.path.insert(0, fraud_detection_grpc_path)
 import fraud_detection_pb2 as fraud_detection
 import fraud_detection_pb2_grpc as fraud_detection_grpc
 
+log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
+sys.path.insert(0, log_tools_path)
+import log_tools
+
 import pandas as pd
 import grpc
 from concurrent import futures
@@ -23,11 +27,11 @@ scaler_path = "/app/fraud_detection/model/scaler.pkl"
 if os.path.exists(model_path) and os.path.exists(scaler_path):
     model = joblib.load(model_path)
     scaler = joblib.load(scaler_path)
-    print("AI-based fraud detection model loaded successfully!")
+    log_tools.info("[Fraud Service] AI-based fraud detection model loaded successfully!")
     
 else:
     # Log to console for debugging
-    print("Model not found! Train the model first.")
+    log_tools.warn("[Fraud Service] Model not found! Train the model first.")
     model, scaler = None, None
 
 
@@ -35,6 +39,7 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
     """
     Implements the FraudDetectionService from our .proto.
     """
+    @log_tools.log_decorator("Fraud Service")
     def CheckOrder(self, request, context):
         """
         Decide whether an order is fraudulent based on:
@@ -45,8 +50,6 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
 
         # 1️⃣ Prepare a response object
         response = fraud_detection.CheckOrderResponse()
-
-        print(response, "FFF")
 
         # 2️⃣ Extract fields from the request
         total_amount = request.totalAmount
@@ -62,6 +65,7 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
 
         # 4️⃣ Standardize + predict
         #    (Assuming you have a global 'scaler' and 'model' loaded at startup)
+        log_tools.debug("[Fraud Service] Checking, if order is fraudulent.")
         features_scaled = scaler.transform(features_df)
         prediction = model.predict(features_scaled)[0]
         is_fraud = bool(prediction)
@@ -71,8 +75,8 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         response.reason = "Suspicious transaction" if is_fraud else "Looks OK"
 
         # 6️⃣ Debug logs (optional)
-        print(f"[Fraud Service] CheckOrder => totalAmount={total_amount}, itemCount={item_count}")
-        print(f"[Fraud Service] Fraud result => isFraud={is_fraud}, reason={response.reason}")
+        log_tools.debug(f"[Fraud Service] CheckOrder => totalAmount={total_amount}, itemCount={item_count}")
+        log_tools.debug(f"[Fraud Service] Fraud result => isFraud={is_fraud}, reason={response.reason}")
 
         return response
 
@@ -86,12 +90,10 @@ def serve():
     port = "50051"
     server.add_insecure_port(f"[::]:{port}")
     server.start()
-    print(f"[Fraud Service] Listening on port {port}...")
+    log_tools.info(f"[Fraud Service] Listening on port {port}...")
     server.wait_for_termination()
 
 if __name__ == '__main__':
+    log_tools.info("[Fraud Service] Starting...")
     serve()
-
-
-
-    
+    log_tools.info("[Fraud Service] Stopped.")

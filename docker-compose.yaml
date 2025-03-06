@@ -20,6 +20,9 @@ services:
       context: ./
       # Use the Dockerfile in the orchestrator directory
       dockerfile: ./orchestrator/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
     ports:
       # Expose port 8081 on the host, and map port 5000 of the container to port 8081 on the host
       - 8081:5000
@@ -42,6 +45,9 @@ services:
       context: ./
       # Use the Dockerfile in the fraud_detection directorys
       dockerfile: ./fraud_detection/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
     ports:
       # Expose port 50051 on the host, and map port 50051 of the container to port 50051 on the host
       - 50051:50051
@@ -66,6 +72,9 @@ services:
       context: ./
       # Use the Dockerfile in the transaction_verification directorys
       dockerfile: ./transaction_verification/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
     ports:
       # Expose port 50052 on the host, and map port 50052 of the container to port 50051 on the host
       - 50052:50052
@@ -88,6 +97,9 @@ services:
       context: ./
       # Use the Dockerfile in the suggestions directorys
       dockerfile: ./suggestions/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
     ports:
       # Expose port 50053 on the host, and map port 50053 of the container to port 50051 on the host
       - 50053:50053
@@ -104,3 +116,16 @@ services:
       - ./utils:/app/utils
       # Mount the suggestions/src directory in the current directory to the /app/suggestions/src directory in the container
       - ./suggestions/src:/app/suggestions/src
+  logger:
+    build:
+      context: ./
+      dockerfile: ./logger/Dockerfile
+    ports:
+      - 50054:50054
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - PYTHONFILE=/app/logger/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./logger/src:/app/logger/src
+      - ./logs:/app/logger/src/logs
