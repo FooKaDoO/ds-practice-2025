@@ -52,6 +52,19 @@ This repository is a **distributed systems** practice project, demonstrating a *
 
 ---
 
+## Cohere API Key (for Suggestions)
+
+1. **Sign up** for a free account (or log in) at [cohere.com](https://cohere.com/).
+2. **Retrieve** your API key from the [Cohere Dashboard](https://dashboard.cohere.ai/).  
+   - Look under **API Keys** or **Settings**.
+3. **Set** the API key in your environment. For example, in `docker-compose.yaml` under the `suggestions` service:
+   ```yaml
+   services:
+     suggestions:
+       environment:
+         - COHERE_API_KEY=your-secret-key-here
+       ...
+
 ## System Flow
 
 1. **User** fills the checkout form in **Frontend** (`localhost:8080`) and clicks **Submit**.
