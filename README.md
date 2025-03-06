@@ -1,46 +1,104 @@
-# Distributed Systems @ University of Tartu
+# Documentation
 
-This repository contains the initial code for the practice sessions of the Distributed Systems course at the University of Tartu.
+This repository is a **distributed systems** practice project, demonstrating a **client-server** architecture with **multiple microservices**. The system simulates an **online bookstore** checkout flow, including **fraud detection**, **transaction verification**, and **book suggestions**. It uses **Flask** for the orchestrator (REST), **gRPC** for inter-service communication, **Docker** for containerization, and **Docker Compose** for orchestration.
 
-## Getting started
+---
 
-### Overview
+## Table of Contents
 
-The code consists of multiple services. Each service is located in a separate folder. The `frontend` service folder contains a Dockerfile and the code for an example bookstore application. Each backend service folder (e.g. `orchestrator` or `fraud_detection`) contains a Dockerfile, a requirements.txt file and the source code of the service. During the practice sessions, you will implement the missing functionality in these backend services, or extend the backend with new services.
+1. [Overview](#overview)
+2. [Services](#services)
+3. [Architecture](#architecture)
+4. [System Flow](#system-flow)
+5. [Setup and Run](#setup-and-run)
+6. [Testing the System](#testing-the-system)
+7. [Project Structure](#project-structure)
+8. [Contributing](#contributing)
+9. [License](#license)
 
-There is also a `utils` folder that contains some helper code or specifications that are used by multiple services. Check the `utils` folder for more information.
+---
 
-### Running the code with Docker Compose [recommended]
+## Overview
 
-To run the code, you need to clone this repository, make sure you have Docker and Docker Compose installed, and run the following command in the root folder of the repository:
+**ds-practice-2025** showcases:
 
-```bash
-docker compose up
-```
+- **Frontend** (HTML + JavaScript) sending orders via REST to an **Orchestrator**.
+- The **Orchestrator** spawns **threads** to call:
+  - **Fraud Detection** microservice (AI-based).
+  - **Transaction Verification** microservice (basic transaction checks).
+  - **Suggestions** microservice (static or AI-based book suggestions).
+- The microservices communicate with the orchestrator via **gRPC**.
+- The final result (approved/rejected) plus any suggestions is returned to the user.
 
-This will start the system with the multiple services. Each service will be restarted automatically when you make changes to the code, so you don't have to restart the system manually while developing. If you want to know how the services are started and configured, check the `docker-compose.yaml` file.
+---
 
-The checkpoint evaluations will be done using the code that is started with Docker Compose, so make sure that your code works with Docker Compose.
+## Services
 
-If, for some reason, changes to the code are not reflected, try to force rebuilding the Docker images with the following command:
+1. **Frontend**  
+   - Simple HTML/JS page in `frontend/src/index.html`.  
+   - Displays items, user form, and sends `POST /checkout` to the orchestrator on port **8081** (mapped from 5000).
 
-```bash
-docker compose up --build
-```
+2. **Orchestrator**  
+   - A Flask-based REST service (`/checkout`) listening on port **5000** internally (exposed as **8081** on the host).  
+   - Spawns threads to call the three microservices in parallel.
 
-### Run the code locally
+3. **Fraud Detection**  
+   - A gRPC service on port **50051**.  
+   - Loads an AI/ML model (Logistic Regression) to decide if an order is suspicious.  
+   - Uses synthetic training data (`fraud_detection/ml_model.py`) or a dummy logic if not trained.
 
-Even though you can run the code locally, it is recommended to use Docker and Docker Compose to run the code. This way you don't have to install any dependencies locally and you can easily run the code on any platform.
+4. **Transaction Verification**  
+   - A gRPC service on port **50052**.  
+   - Checks credit card info, item count, and other basic “valid transaction” rules (e.g. `quantity > 0`).
 
-If you want to run the code locally, you need to install the following dependencies:
+5. **Suggestions**  
+   - A gRPC service on port **50053**.  
+   - Either returns static suggestions or calls an AI service (like Cohere/OpenAI) to generate book recommendations.
 
-backend services:
-- Python 3.8 or newer
-- pip
-- [grpcio-tools](https://grpc.io/docs/languages/python/quickstart/)
-- requirements.txt dependencies from each service
+---
 
-frontend service:
-- It's a simple static HTML page, you can open `frontend/src/index.html` in your browser.
+## Architecture
 
-And then run each service individually.
+- **Frontend** runs on **port 8080**.  
+- **Orchestrator** listens on **port 8081** externally (5000 internally).  
+- **Fraud Detection**: port 50051, **Transaction**: 50052, **Suggestions**: 50053.  
+- The Orchestrator calls each microservice via **gRPC**.
+
+---
+
+## System Flow
+
+1. **User** fills the checkout form in **Frontend** (`localhost:8080`) and clicks **Submit**.
+2. **Frontend** sends `POST /checkout` to **Orchestrator** (`localhost:8081`) with order data (items, credit card, etc.).
+3. **Orchestrator** spawns **3 threads**:
+   - Fraud detection (gRPC on port 50051).  
+   - Transaction verification (gRPC on port 50052).  
+   - Suggestions (gRPC on port 50053).  
+4. Each microservice returns a result:
+   - **Fraud**: `isFraud=True/False`, `reason=...`.
+   - **Transaction**: `valid=True/False`, `reason=...`.
+   - **Suggestions**: a list of recommended books.
+5. **Orchestrator** aggregates:
+   - If `isFraud=True` or `transaction_ok=False`, **reject**.  
+   - Else, **approve** + attach suggestions.
+6. **Orchestrator** returns final JSON to **Frontend** → user sees “Order Approved/Rejected” plus any suggestions.
+
+---
+
+## Setup and Run
+
+### Prerequisites
+
+- **Docker**  
+- **Docker Compose**
+- **Git**
+
+### Steps
+
+1. **Clone** the repo:
+   ```bash
+   git clone https://github.com/FooKaDoO/ds-practice-2025
+   cd ds-practice-2025
+
+   docker-compose build
+   docker-compose up
