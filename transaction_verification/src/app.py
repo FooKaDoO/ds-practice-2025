@@ -31,7 +31,11 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
         response = tx_pb2.TransactionResponse()
 
         card_number = request.creditCardNumber or ""
-        items_list = request.items
+
+        if len(request.items) == 0:
+            response.valid = False
+            response.reason = "Empty cart"
+            return response
 
         for item in request.items:
             if item.quantity <= 0:
@@ -39,17 +43,12 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
                 response.reason = f"Invalid item quantity: {item.quantity} for {item.name}"
                 return response
 
-
         if not card_number or len(card_number) < 13:
             response.valid = False
             response.reason = "Invalid credit card number"
             log_tools.debug(f"[Transaction Verification] VerifyTransaction called. valid={response.valid}, reason={response.reason}")
             return response
         
-        if len(items_list) == 0:
-            response.valid = False
-            response.reason = "Empty cart"
-            return response        
 
         # If all checks pass
         response.valid = True
