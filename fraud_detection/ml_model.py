@@ -85,7 +85,7 @@ def train_model():
     joblib.dump(model, f"{model_dir}/fraud_model.pkl")
     joblib.dump(scaler, f"{model_dir}/scaler.pkl")
 
-    print("✅ Fraud detection model trained and saved!")
+    print("Fraud detection model trained and saved!")
     print(f"Dataset shape: {df.shape}, Frauds: {df['is_fraud'].sum()}")
 
 if __name__ == "__main__":

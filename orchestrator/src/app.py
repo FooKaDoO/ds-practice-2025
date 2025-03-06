@@ -158,21 +158,27 @@ def checkout():
     suggestions_thread.join()
     log_tools.debug("[Orchestrator] All threads completed.")
 
-
     log_tools.debug("[Orchestrator] Deciding if order is approved or not.")
-    if result_dict.get('isFraud') or not result_dict.get('transaction_ok'):
-        reason = result_dict.get('fraudReason')
-        if not reason:
-            reason = result_dict.get('transaction_reason')
+
+    if not result_dict.get('transaction_ok'):
+        # Transaction verification failed
+        reason = result_dict.get('transaction_reason', "Transaction verification failed")
         final_status = f"Order Rejected. {reason}"
-        # No suggestions for now
+        suggested_books = []
+    elif result_dict.get('isFraud'):
+        # Fraud detection failed
+        reason = result_dict.get('fraudReason', "Fraud detected")
+        final_status = f"Order Rejected. {reason}"
         suggested_books = []
     else:
+        # Both checks passed
         final_status = 'Order Approved'
         suggested_books = result_dict.get('suggested_books', [])
+
     log_tools.debug(f"[Orchestrator] {final_status}")
     if suggested_books:
         log_tools.debug(f"[Orchestrator] Suggested books: {suggested_books}")
+
 
     # Build the final JSON response
     # matching bookstore.yaml -> OrderStatusResponse

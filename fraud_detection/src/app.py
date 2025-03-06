@@ -51,15 +51,6 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         # 1️⃣ Prepare a response object
         response = fraud_detection.CheckOrderResponse()
 
-        if request.totalAmount > 1000:
-            response.isFraud = True
-            response.reason = "Amount too large."
-            return response
-        if request.totalAmount < 0:
-            response.isFraud = True
-            response.reason = "Amount too small."
-            return response
-
         # 2️⃣ Extract fields from the request
         total_amount = request.totalAmount
         # Sum up all quantities
@@ -73,7 +64,6 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         features_df = pd.DataFrame(features, columns=["amount", "num_items", "past_fraudulent_orders"])
 
         # 4️⃣ Standardize + predict
-        #    (Assuming you have a global 'scaler' and 'model' loaded at startup)
         log_tools.debug("[Fraud Service] Checking, if order is fraudulent.")
         features_scaled = scaler.transform(features_df)
         prediction = model.predict(features_scaled)[0]
@@ -81,6 +71,7 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
 
         # 5️⃣ Set response fields
         response.isFraud = is_fraud
+
         response.reason = "Suspicious transaction" if is_fraud else "Looks OK"
 
         # 6️⃣ Debug logs (optional)

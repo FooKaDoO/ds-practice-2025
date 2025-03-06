@@ -4,9 +4,8 @@ import grpc
 from concurrent import futures
 import cohere
 
-
 # Import the generated gRPC stubs
-FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
+FILE = __file__ if "__file__" in globals() else os.getenv("PYTHONFILE", "")
 suggestions_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/suggestions'))
 sys.path.insert(0, suggestions_grpc_path)
 
@@ -26,14 +25,23 @@ class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
 
     @log_tools.log_decorator("Suggestions Service")
     def GetBookSuggestions(self, request, context):
+        # Build a list of ordered items
         items_ordered = [f"{i.name} (x{i.quantity})" for i in request.items]
-        prompt = f"User ordered these books: {', '.join(items_ordered)}. Suggest 3 new similar books in separate lines."
 
-        
+        # Updated prompt: force EXACTLY 3 lines
+        prompt = (
+            f"User ordered these books: {', '.join(items_ordered)}.\n"
+            "Suggest EXACTLY 3 new similar books, each on its own line.\n"
+            "Example:\n"
+            "Book 1\n"
+            "Book 2\n"
+            "Book 3\n"
+        )
+
         log_tools.debug("[Suggestions Service] Generating suggestions using Cohere.")
         try:
             response = co.generate(
-                model='command-r-plus',
+                model='command-r-plus',  # or whichever model you have access to
                 prompt=prompt,
                 max_tokens=100,
                 temperature=1.0,
@@ -41,26 +49,27 @@ class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
                 p=0.75
             )
 
-            # The returned text
             suggestions_text = response.generations[0].text.strip()
-            log_tools.debug(f"[Suggestions Service] Cohere suggestions: {suggestions_text}")
+            log_tools.debug(f"[Suggestions Service] Cohere suggestions:\n{suggestions_text}")
 
-            # Convert the text to a structured list of Book objects
-            # For a quick hack, we'll just split lines
-            lines = suggestions_text.split('\n')
-            response_proto = sug_pb2.SuggestionsResponse()
-            for idx, line in enumerate(lines[:3], start=1):
-                if line.strip():
-                    book_proto = response_proto.books.add()
-                    book_proto.bookId = f"Cohere-{idx}"
-                    book_proto.title = line.strip()[:50]
-                    book_proto.author = "Cohere AI"
+            # Split by lines, ignoring empty ones
+            lines = [line.strip() for line in suggestions_text.splitlines() if line.strip()]
             
+            # Build the gRPC response
+            response_proto = sug_pb2.SuggestionsResponse()
+
+            # Only take up to 3 lines
+            for idx, line in enumerate(lines[:3], start=1):
+                book_proto = response_proto.books.add()
+                book_proto.bookId = f"Cohere-{idx}"
+                book_proto.title = line[:50]  # Truncate if too long
+                book_proto.author = "Cohere AI"
+
             log_tools.debug(f"[Suggestions Service] Returning {len(response_proto.books)} suggestions.")
             return response_proto
 
         except Exception as e:
-            log_tools.error(f"[Suggestions Service] Cohore error API error: {e}")
+            log_tools.error(f"[Suggestions Service] Cohere API error: {e}")
             return sug_pb2.SuggestionsResponse()
                 
 def serve():
@@ -70,7 +79,7 @@ def serve():
     )
 
     port = "50053"
-    server.add_insecure_port(f"[::]:{port}")
+    server.add_insecure_port(f"[::]:" + port)
     server.start()
     log_tools.info(f"[Suggestions Service] Listening on port {port}...")
     server.wait_for_termination()
