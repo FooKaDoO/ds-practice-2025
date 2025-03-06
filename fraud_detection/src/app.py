@@ -51,6 +51,15 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         # 1️⃣ Prepare a response object
         response = fraud_detection.CheckOrderResponse()
 
+        if request.totalAmount > 1000:
+            response.isFraud = True
+            response.reason = "Amount too large."
+            return response
+        if request.totalAmount <= 0:
+            response.isFraud = True
+            response.reason = "Amount too small."
+            return response
+
         # 2️⃣ Extract fields from the request
         total_amount = request.totalAmount
         # Sum up all quantities
