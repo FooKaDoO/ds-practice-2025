@@ -33,6 +33,7 @@ class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
         log_tools.debug("[Suggestions Service] Generating suggestions using Cohere.")
         try:
             response = co.generate(
+                model='command-r-plus',
                 prompt=prompt,
                 max_tokens=100,
                 temperature=1.0,
