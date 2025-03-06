@@ -63,6 +63,8 @@ services:
       - ./utils:/app/utils
       # Mount the fraud_detection/src directory in the current directory to the /app/fraud_detection/src directory in the container
       - ./fraud_detection/src:/app/fraud_detection/src
+      - ./fraud_detection/model:/app/fraud_detection/model
+
   transaction_verification:
     build:
       # Use the current directory as the build context
@@ -108,6 +110,7 @@ services:
       # The PYTHONFILE environment variable specifies the absolute entry point of the application
       # Check app.py in the suggestions directory to see how this is used
       - PYTHONFILE=/app/suggestions/src/app.py
+      - COHERE_API_KEY=TMGoKVy7oc0uu5xmPjUMoeYmjeRuEn4w3gnTRIaD
     volumes:
       # Mount the utils directory in the current directory to the /app/utils directory in the container
       - ./utils:/app/utils

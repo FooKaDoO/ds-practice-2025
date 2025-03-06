@@ -67,19 +67,20 @@ def calculate_order_total(items):
 
 @log_tools.log_decorator("Orchestrator")
 def call_fraud_detection(order_data, result_dict):
-    """
-    Sends a gRPC request to the Fraud Detection microservice,
-    and stores the result in result_dict['fraud'] = True/False.
-    """
     total_amount = calculate_order_total(order_data.get('items', []))
 
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub = fraud_detection_grpc.FraudDetectionServiceStub(channel)
 
         # Prepare the request
-        request_proto = fraud_detection.CheckOrderRequest(totalAmount=total_amount)
+        request_proto = fraud_detection.CheckOrderRequest(
+            totalAmount=total_amount,
+            items=[
+                fraud_detection.Item(name=i["name"], quantity=i["quantity"]) 
+                for i in order_data.get('items', [])
+            ]
+        )
 
-        # Call the remote method
         response = stub.CheckOrder(request_proto)
 
     log_tools.debug(f"[Orchestrator] Fraud detection response: isFraud={response.isFraud}, reason={response.reason}")
