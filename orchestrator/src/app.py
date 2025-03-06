@@ -161,7 +161,7 @@ def checkout():
 
     log_tools.debug("[Orchestrator] Deciding if order is approved or not.")
     if result_dict.get('isFraud') or not result_dict.get('transaction_ok'):
-        reason = result_dict.get('reason')
+        reason = result_dict.get('fraudReason')
         if not reason:
             reason = result_dict.get('transaction_reason')
         final_status = f"Order Rejected. {reason}"
