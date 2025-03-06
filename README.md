@@ -2,6 +2,8 @@
 
 This repository is a **distributed systems** practice project, demonstrating a **client-server** architecture with **multiple microservices**. The system simulates an **online bookstore** checkout flow, including **fraud detection**, **transaction verification**, and **book suggestions**. It uses **Flask** for the orchestrator (REST), **gRPC** for inter-service communication, **Docker** for containerization, and **Docker Compose** for orchestration.
 
+---
+
 ## Overview
 
 **ds-practice-2025** showcases:
@@ -10,7 +12,7 @@ This repository is a **distributed systems** practice project, demonstrating a *
 - The **Orchestrator** spawns **threads** to call:
   - **Fraud Detection** microservice (AI-based).
   - **Transaction Verification** microservice (basic transaction checks).
-  - **Suggestions** microservice (static or AI-based book suggestions).
+  - **Suggestions** microservice (AI-based book suggestions).
 - The microservices communicate with the orchestrator via **gRPC**.
 - The final result (approved/rejected) plus any suggestions is returned to the user.
 
@@ -20,7 +22,7 @@ This repository is a **distributed systems** practice project, demonstrating a *
 
 1. **Frontend**  
    - Simple HTML/JS page in `frontend/src/index.html`.  
-   - Displays items, user form, and sends `POST /checkout` to the orchestrator on port **8081** (mapped from 5000).
+   - Displays items, user form, and sends `POST /checkout` to the orchestrator on port **8081**.
 
 2. **Orchestrator**  
    - A Flask-based REST service (`/checkout`) listening on port **5000** internally (exposed as **8081** on the host).  
@@ -37,14 +39,14 @@ This repository is a **distributed systems** practice project, demonstrating a *
 
 5. **Suggestions**  
    - A gRPC service on port **50053**.  
-   - Either returns static suggestions or calls an AI service (like Cohere/OpenAI) to generate book recommendations.
+   - Returns response from AI service (like Cohere/OpenAI) to generate book recommendations.
 
 ---
 
 ## Architecture
 
 - **Frontend** runs on **port 8080**.  
-- **Orchestrator** listens on **port 8081** externally (5000 internally).  
+- **Orchestrator** listens on **port 8081**.  
 - **Fraud Detection**: port 50051, **Transaction**: 50052, **Suggestions**: 50053.  
 - The Orchestrator calls each microservice via **gRPC**.
 
