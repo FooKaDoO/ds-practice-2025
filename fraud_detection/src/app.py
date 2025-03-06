@@ -55,7 +55,7 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
             response.isFraud = True
             response.reason = "Amount too large."
             return response
-        if request.totalAmount <= 0:
+        if request.totalAmount < 0:
             response.isFraud = True
             response.reason = "Amount too small."
             return response
