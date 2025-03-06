@@ -4,20 +4,6 @@ This repository is a **distributed systems** practice project, demonstrating a *
 
 ---
 
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Services](#services)
-3. [Architecture](#architecture)
-4. [System Flow](#system-flow)
-5. [Setup and Run](#setup-and-run)
-6. [Testing the System](#testing-the-system)
-7. [Project Structure](#project-structure)
-8. [Contributing](#contributing)
-9. [License](#license)
-
----
-
 ## Overview
 
 **ds-practice-2025** showcases:
