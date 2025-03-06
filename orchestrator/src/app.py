@@ -161,7 +161,7 @@ def checkout():
 
     log_tools.debug("[Orchestrator] Deciding if order is approved or not.")
     if result_dict.get('isFraud') or not result_dict.get('valid'):
-        final_status = f'Order Rejected. {result_dict.get('reason')}'
+        final_status = f"Order Rejected. {result_dict.get('reason')}"
         # No suggestions for now
         suggested_books = []
     else:
