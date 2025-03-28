@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1etransaction_verification.proto\x12\x0btransaction\"u\n\x12TransactionRequest\x12\x18\n\x10\x63reditCardNumber\x18\x01 \x01(\t\x12\x16\n\x0e\x65xpirationDate\x18\x02 \x01(\t\x12\x0b\n\x03\x63vv\x18\x03 \x01(\t\x12 \n\x05items\x18\x04 \x03(\x0b\x32\x11.transaction.Item\"&\n\x04Item\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"4\n\x13TransactionResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x0e\n\x06reason\x18\x02 \x01(\t2x\n\x1eTransactionVerificationService\x12V\n\x11VerifyTransaction\x12\x1f.transaction.TransactionRequest\x1a .transaction.TransactionResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1etransaction_verification.proto\x12\x0btransaction\"&\n\x12TransactionRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"&\n\x04Item\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"4\n\x13TransactionResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x0e\n\x06reason\x18\x02 \x01(\t\"l\n\tOrderData\x12 \n\x05items\x18\x01 \x03(\x0b\x32\x11.transaction.Item\x12\x18\n\x10\x63reditCardNumber\x18\x02 \x01(\t\x12\x16\n\x0e\x65xpirationDate\x18\x03 \x01(\t\x12\x0b\n\x03\x63vv\x18\x04 \x01(\t\"P\n\x10InitOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12*\n\norder_data\x18\x02 \x01(\x0b\x32\x16.transaction.OrderData\"2\n\x1dInitOrderConfirmationResponse\x12\x11\n\tisCreated\x18\x01 \x01(\x08\x32\xd0\x01\n\x1eTransactionVerificationService\x12V\n\tInitOrder\x12\x1d.transaction.InitOrderRequest\x1a*.transaction.InitOrderConfirmationResponse\x12V\n\x11VerifyTransaction\x12\x1f.transaction.TransactionRequest\x1a .transaction.TransactionResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,11 +22,17 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'transaction_verification_pb
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_TRANSACTIONREQUEST']._serialized_start=47
-  _globals['_TRANSACTIONREQUEST']._serialized_end=164
-  _globals['_ITEM']._serialized_start=166
-  _globals['_ITEM']._serialized_end=204
-  _globals['_TRANSACTIONRESPONSE']._serialized_start=206
-  _globals['_TRANSACTIONRESPONSE']._serialized_end=258
-  _globals['_TRANSACTIONVERIFICATIONSERVICE']._serialized_start=260
-  _globals['_TRANSACTIONVERIFICATIONSERVICE']._serialized_end=380
+  _globals['_TRANSACTIONREQUEST']._serialized_end=85
+  _globals['_ITEM']._serialized_start=87
+  _globals['_ITEM']._serialized_end=125
+  _globals['_TRANSACTIONRESPONSE']._serialized_start=127
+  _globals['_TRANSACTIONRESPONSE']._serialized_end=179
+  _globals['_ORDERDATA']._serialized_start=181
+  _globals['_ORDERDATA']._serialized_end=289
+  _globals['_INITORDERREQUEST']._serialized_start=291
+  _globals['_INITORDERREQUEST']._serialized_end=371
+  _globals['_INITORDERCONFIRMATIONRESPONSE']._serialized_start=373
+  _globals['_INITORDERCONFIRMATIONRESPONSE']._serialized_end=423
+  _globals['_TRANSACTIONVERIFICATIONSERVICE']._serialized_start=426
+  _globals['_TRANSACTIONVERIFICATIONSERVICE']._serialized_end=634
 # @@protoc_insertion_point(module_scope)

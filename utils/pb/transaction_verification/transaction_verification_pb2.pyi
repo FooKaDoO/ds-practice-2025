@@ -5,7 +5,7 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-class CheckOrderRequest(_message.Message):
+class TransactionRequest(_message.Message):
     __slots__ = ("order_id",)
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     order_id: str
@@ -19,19 +19,25 @@ class Item(_message.Message):
     quantity: int
     def __init__(self, name: _Optional[str] = ..., quantity: _Optional[int] = ...) -> None: ...
 
-class CheckOrderResponse(_message.Message):
-    __slots__ = ("isFraud", "reason")
-    ISFRAUD_FIELD_NUMBER: _ClassVar[int]
+class TransactionResponse(_message.Message):
+    __slots__ = ("valid", "reason")
+    VALID_FIELD_NUMBER: _ClassVar[int]
     REASON_FIELD_NUMBER: _ClassVar[int]
-    isFraud: bool
+    valid: bool
     reason: str
-    def __init__(self, isFraud: bool = ..., reason: _Optional[str] = ...) -> None: ...
+    def __init__(self, valid: bool = ..., reason: _Optional[str] = ...) -> None: ...
 
 class OrderData(_message.Message):
-    __slots__ = ("items",)
+    __slots__ = ("items", "creditCardNumber", "expirationDate", "cvv")
     ITEMS_FIELD_NUMBER: _ClassVar[int]
+    CREDITCARDNUMBER_FIELD_NUMBER: _ClassVar[int]
+    EXPIRATIONDATE_FIELD_NUMBER: _ClassVar[int]
+    CVV_FIELD_NUMBER: _ClassVar[int]
     items: _containers.RepeatedCompositeFieldContainer[Item]
-    def __init__(self, items: _Optional[_Iterable[_Union[Item, _Mapping]]] = ...) -> None: ...
+    creditCardNumber: str
+    expirationDate: str
+    cvv: str
+    def __init__(self, items: _Optional[_Iterable[_Union[Item, _Mapping]]] = ..., creditCardNumber: _Optional[str] = ..., expirationDate: _Optional[str] = ..., cvv: _Optional[str] = ...) -> None: ...
 
 class InitOrderRequest(_message.Message):
     __slots__ = ("order_id", "order_data")
