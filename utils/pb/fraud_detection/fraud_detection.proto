@@ -3,12 +3,12 @@ syntax = "proto3";
 package fraud;
 
 service FraudDetectionService {
+    rpc InitOrder (InitOrderRequest) returns (InitOrderConfirmationResponse);
     rpc CheckOrder (CheckOrderRequest) returns (CheckOrderResponse);
 }
 
 message CheckOrderRequest {
-    float totalAmount = 1;
-    repeated Item items = 2;
+    string order_id = 1;
 }
 
 message Item {
@@ -19,4 +19,17 @@ message Item {
 message CheckOrderResponse {
     bool isFraud = 1;
     string reason = 2;
+}
+
+message OrderData {
+    repeated Item items = 1;
+}
+
+message InitOrderRequest {
+    string order_id = 1;
+    OrderData order_data = 2;
+}
+
+message InitOrderConfirmationResponse {
+    bool isCreated = 1;
 }

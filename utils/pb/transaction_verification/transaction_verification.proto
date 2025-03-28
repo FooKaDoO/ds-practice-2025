@@ -4,15 +4,13 @@ package transaction;
 
 // Service definition
 service TransactionVerificationService {
+    rpc InitOrder (InitOrderRequest) returns (InitOrderConfirmationResponse);
     rpc VerifyTransaction (TransactionRequest) returns (TransactionResponse);
 }
 
 // Request message
 message TransactionRequest {
-    string creditCardNumber = 1;
-    string expirationDate = 2;
-    string cvv = 3;
-    repeated Item items = 4;  // List of items in the order
+    string order_id = 1;
 }
 
 // Define an item structure
@@ -25,4 +23,20 @@ message Item {
 message TransactionResponse {
     bool valid = 1;
     string reason = 2;
+}
+
+message OrderData {
+    repeated Item items = 1;
+    string creditCardNumber = 2;
+    string expirationDate = 3;
+    string cvv = 4;
+}
+
+message InitOrderRequest {
+    string order_id = 1;
+    OrderData order_data = 2;
+}
+
+message InitOrderConfirmationResponse {
+    bool isCreated = 1;
 }
