@@ -5,6 +5,11 @@ package transaction;
 // Service definition
 service TransactionVerificationService {
     rpc VerifyTransaction (TransactionRequest) returns (TransactionResponse);
+    rpc InitializeOrder (InitializeOrderRequest) returns (InitializeOrderResponse);
+
+    rpc VerifyItems (VerifyItemsRequest) returns (VerifyItemsResponse);
+    rpc VerifyUserData (VerifyUserDataRequest) returns (VerifyUserDataResponse);
+    rpc VerifyCardInfo (VerifyCardInfoRequest) returns (VerifyCardInfoResponse);
 }
 
 // Request message
@@ -13,6 +18,16 @@ message TransactionRequest {
     string expirationDate = 2;
     string cvv = 3;
     repeated Item items = 4;  // List of items in the order
+}
+
+message InitializeOrderRequest {
+    string orderId = 1;
+    string orderDataJson = 2;
+}
+
+message InitializeOrderResponse {
+    bool success = 1;
+    string message = 2;
 }
 
 // Define an item structure
@@ -25,4 +40,39 @@ message Item {
 message TransactionResponse {
     bool valid = 1;
     string reason = 2;
+}
+
+
+
+message VerifyItemsRequest {
+    string orderId = 1;
+    repeated int32 vectorClock = 2;
+}
+
+message VerifyItemsResponse {
+    bool success = 1;
+    string reason = 2;
+    repeated int32 updatedClock = 3;
+}
+
+message VerifyUserDataRequest {
+    string orderId = 1;
+    repeated int32 vectorClock = 2;
+}
+
+message VerifyUserDataResponse {
+    bool success = 1;
+    string reason = 2;
+    repeated int32 updatedClock = 3;
+}
+
+message VerifyCardInfoRequest {
+    string orderId = 1;
+    repeated int32 vectorClock = 2;
+}
+
+message VerifyCardInfoResponse {
+    bool success = 1;
+    string reason = 2;
+    repeated int32 updatedClock = 3;
 }
