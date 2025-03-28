@@ -15,8 +15,22 @@ log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
+microservice_path = os.path.abspath(os.path.join(FILE, '../../../utils/microservice'))
+sys.path.insert(0, microservice_path)
+from microservice import MicroService
 
-class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerificationServiceServicer):
+class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerificationServiceServicer, MicroService):
+
+    @log_tools.log_decorator("Transaction Verification")
+    def InitOrder(self, request, context):
+        response = tx_pb2.InitOrderConfirmationResponse()
+
+        self.init_order(request.order_id, request.order_data)
+
+        response.isCreated = True
+        return response
+    
+
     """
     Implements the TransactionVerificationService gRPC methods.
     """
@@ -30,14 +44,18 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
 
         response = tx_pb2.TransactionResponse()
 
-        card_number = request.creditCardNumber or ""
+        order_id = request.order_id
 
-        if len(request.items) == 0:
+        entry = self.orders[order_id]
+
+        card_number = entry["order_data"].creditCardNumber or ""
+
+        if len(entry["order_data"].items) == 0:
             response.valid = False
             response.reason = "Empty cart"
             return response
 
-        for item in request.items:
+        for item in entry["order_data"].items:
             if item.quantity <= 0:
                 response.valid = False
                 response.reason = f"Invalid item quantity: {item.quantity} for {item.name}"

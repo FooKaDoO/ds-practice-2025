@@ -3,6 +3,7 @@ import grpc
 import sys
 import os
 import threading
+import uuid
 
 
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
@@ -55,30 +56,73 @@ def index():
     return response
 
 
-@log_tools.log_decorator("Orchestrator")
-def calculate_order_total(items):
-    # For a real scenario, you'd sum up item.price * item.quantity or similar
-    # Here, just do something dummy:
-    total = 0
-    for item in items:
-        quantity = item.get('quantity', 1)
-        total += 10 * quantity
-    return total
 
 @log_tools.log_decorator("Orchestrator")
-def call_fraud_detection(order_data, result_dict):
-    total_amount = calculate_order_total(order_data.get('items', []))
+def init_order(order_id: str, order_data: dict):
 
     with grpc.insecure_channel('fraud_detection:50051') as channel:
         stub = fraud_detection_grpc.FraudDetectionServiceStub(channel)
 
         # Prepare the request
+        request_proto = fraud_detection.InitOrderRequest(
+            order_id=order_id,
+            order_data=fraud_detection.OrderData(
+                items=[
+                    fraud_detection.Item(name=i["name"], quantity=i["quantity"]) 
+                    for i in order_data.get('items', [])
+                ]
+            )
+        )
+
+        response = stub.InitOrder(request_proto)
+
+    log_tools.debug(f"[Orchestrator] Fraud detection response: isCreated={response.isCreated}")
+
+    with grpc.insecure_channel('transaction_verification:50052') as channel:
+        stub = transaction_verification_grpc.TransactionVerificationServiceStub(channel)
+
+        request_proto = transaction_verification.InitOrderRequest(
+            order_id=order_id,
+            order_data=transaction_verification.OrderData(
+                items=[
+                    transaction_verification.Item(name=item["name"], quantity=item["quantity"]) 
+                    for item in order_data.get('items', [])
+                ],
+                creditCardNumber=order_data.get('creditCard', {}).get('number', ""),
+                expirationDate=order_data.get('creditCard', {}).get('expirationDate', ""),
+                cvv=order_data.get('creditCard', {}).get('cvv', "")
+            )
+        )
+
+        response = stub.InitOrder(request_proto)
+
+    log_tools.debug(f"[Orchestrator] Transaction verification response: isCreated={response.isCreated}")
+
+    with grpc.insecure_channel('suggestions:50053') as channel:
+        stub = suggestions_grpc.SuggestionsServiceStub(channel)
+
+        request_proto = suggestions.InitOrderRequest(
+            order_id=order_id,
+            order_data=suggestions.OrderData(
+                items=[
+                    suggestions.Item(name=item["name"], quantity=item["quantity"]) 
+                    for item in order_data.get('items', [])
+                ]
+            )
+        )
+
+        response = stub.InitOrder(request_proto)
+
+    log_tools.debug(f"[Orchestrator] Suggestions response: isCreated={response.isCreated}")
+
+@log_tools.log_decorator("Orchestrator")
+def call_fraud_detection(order_id: str, result_dict: dict):
+    with grpc.insecure_channel('fraud_detection:50051') as channel:
+        stub = fraud_detection_grpc.FraudDetectionServiceStub(channel)
+
+        # Prepare the request
         request_proto = fraud_detection.CheckOrderRequest(
-            totalAmount=total_amount,
-            items=[
-                fraud_detection.Item(name=i["name"], quantity=i["quantity"]) 
-                for i in order_data.get('items', [])
-            ]
+            order_id=order_id
         )
 
         response = stub.CheckOrder(request_proto)
@@ -88,7 +132,7 @@ def call_fraud_detection(order_data, result_dict):
     result_dict['fraudReason'] = response.reason
 
 @log_tools.log_decorator("Orchestrator")
-def call_transaction_verification(order_data, result_dict):
+def call_transaction_verification(order_id: str, result_dict: dict):
     """
     Calls the Transaction Verification microservice and updates result_dict.
     """
@@ -96,10 +140,7 @@ def call_transaction_verification(order_data, result_dict):
         stub = transaction_verification_grpc.TransactionVerificationServiceStub(channel)
 
         request_proto = transaction_verification.TransactionRequest(
-            creditCardNumber=order_data.get('creditCard', {}).get('number', ""),
-            expirationDate=order_data.get('creditCard', {}).get('expirationDate', ""),
-            cvv=order_data.get('creditCard', {}).get('cvv', ""),
-            items=[transaction_verification.Item(name=item["name"], quantity=item["quantity"]) for item in order_data.get('items', [])]
+            order_id=order_id
         )
 
         response = stub.VerifyTransaction(request_proto)
@@ -109,7 +150,7 @@ def call_transaction_verification(order_data, result_dict):
     result_dict['transaction_reason'] = response.reason
 
 @log_tools.log_decorator("Orchestrator")
-def call_suggestions(order_data, result_dict):
+def call_suggestions(order_id: str, result_dict: dict):
     """
     Calls the Suggestions microservice and updates result_dict.
     """
@@ -117,7 +158,7 @@ def call_suggestions(order_data, result_dict):
         stub = suggestions_grpc.SuggestionsServiceStub(channel)
 
         request_proto = suggestions.SuggestionsRequest(
-            items=[suggestions.Item(name=item["name"], quantity=item["quantity"]) for item in order_data.get('items', [])]
+            order_id=order_id
         )
 
         response = stub.GetBookSuggestions(request_proto)
@@ -137,14 +178,19 @@ def checkout():
     # Print request object data
     log_tools.debug(f"[Orchestrator] Request Data: {request_data.get('items')}")
 
+    order_id = str(uuid.uuid4())
+
+    log_tools.debug(f"[Orchestrator] Created Order, OrderID: {order_id}")
+
+    init_order(order_id, request_data)
+
     # We'll store partial results here
     result_dict = {}
     
     log_tools.debug("[Orchestrator] Creating threads.")
-    fraud_thread = threading.Thread(target=call_fraud_detection, args=(request_data, result_dict))
-    transaction_thread = threading.Thread(target=call_transaction_verification, args=(request_data, result_dict))
-    suggestions_thread = threading.Thread(target=call_suggestions, args=(request_data, result_dict))
-
+    fraud_thread = threading.Thread(target=call_fraud_detection, args=(order_id, result_dict))
+    transaction_thread = threading.Thread(target=call_transaction_verification, args=(order_id, result_dict))
+    suggestions_thread = threading.Thread(target=call_suggestions, args=(order_id, result_dict))
 
     log_tools.debug("[Orchestrator] Starting all threads.")
     fraud_thread.start()

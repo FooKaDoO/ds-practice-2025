@@ -18,15 +18,34 @@ log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
-class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
+microservice_path = os.path.abspath(os.path.join(FILE, '../../../utils/microservice'))
+sys.path.insert(0, microservice_path)
+from microservice import MicroService
+
+
+class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer, MicroService):
     """
     Implements the SuggestionsService gRPC methods.
     """
 
     @log_tools.log_decorator("Suggestions Service")
+    def InitOrder(self, request, context):
+        response = sug_pb2.InitOrderConfirmationResponse()
+
+        self.init_order(request.order_id, request.order_data)
+
+        response.isCreated = True
+        return response
+
+    @log_tools.log_decorator("Suggestions Service")
     def GetBookSuggestions(self, request, context):
+        
+        order_id = request.order_id
+
+        entry = self.orders[order_id]
+
         # Build a list of ordered items
-        items_ordered = [f"{i.name} (x{i.quantity})" for i in request.items]
+        items_ordered = [f"{i.name} (x{i.quantity})" for i in entry["order_data"].items]
 
         # Updated prompt: force EXACTLY 3 lines
         prompt = (

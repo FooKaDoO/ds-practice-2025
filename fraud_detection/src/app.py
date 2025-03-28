@@ -14,6 +14,10 @@ log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
+microservice_path = os.path.abspath(os.path.join(FILE, '../../../utils/microservice'))
+sys.path.insert(0, microservice_path)
+from microservice import MicroService
+
 import pandas as pd
 import grpc
 from concurrent import futures
@@ -35,7 +39,19 @@ else:
     model, scaler = None, None
 
 
-class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceServicer):
+class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceServicer, MicroService):
+
+    @log_tools.log_decorator("Fraud Service")
+    def InitOrder(self, request, context):
+        response = fraud_detection.InitOrderConfirmationResponse()
+        
+        self.init_order(request.order_id, request.order_data)
+
+        response.isCreated = True
+        return response
+        
+        
+
     """
     Implements the FraudDetectionService from our .proto.
     """
@@ -52,9 +68,16 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         response = fraud_detection.CheckOrderResponse()
 
         # 2️⃣ Extract fields from the request
-        total_amount = request.totalAmount
+        order_id = request.order_id
+
+        entry = self.orders[order_id]
+        
+        total_amount = 0
+        for item in entry["order_data"].items:
+            total_amount += 10 * item.quantity
+
         # Sum up all quantities
-        item_count = sum(item.quantity for item in request.items)
+        item_count = sum(item.quantity for item in entry["order_data"].items)
 
         # 3️⃣ Build a DataFrame with the columns your model was trained on
         #    - "amount"   => matches "amount" in your training code
