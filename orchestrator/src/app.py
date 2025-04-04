@@ -33,8 +33,6 @@ import log_tools
 app = Flask(__name__)
 CORS(app, resources={r'/*': {'origins': '*'}})
 
-# --- New: Functions for Transaction Verification Events ---
-
 @log_tools.log_decorator("Orchestrator")
 def call_verify_items(order_id, current_clock, order_data, result_dict):
     """
