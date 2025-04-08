@@ -26,6 +26,14 @@ sys.path.insert(0, suggestions_grpc_path)
 import suggestions_pb2 as suggestions
 import suggestions_pb2_grpc as suggestions_grpc
 
+
+
+order_queue_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_queue'))
+sys.path.insert(0, order_queue_grpc_path)
+
+import order_queue_pb2 as oq_pb2
+import order_queue_pb2_grpc as oq_pb2_grpc
+
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
@@ -135,6 +143,58 @@ def call_generate_suggestions(order_id, current_clock, order_data, result_dict):
         ]
     }
 
+@log_tools.log_decorator("Orchestrator")
+def call_initialize_fraud(order_id, order_data, result_dict):
+    with grpc.insecure_channel('fraud_detection:50051') as channel:
+        stub = fraud_detection_grpc.FraudDetectionServiceStub(channel)
+        init_request = fraud_detection.InitializeOrderRequest(
+            orderId=order_id,
+            orderDataJson=json.dumps(order_data)
+        )
+        response = stub.InitializeOrder(init_request)
+    log_tools.debug(f"[Orchestrator] Fraud Init: {response.message}")
+    result_dict['fraud_init'] = response.success
+
+@log_tools.log_decorator("Orchestrator")
+def call_initialize_tx(order_id, order_data, result_dict):
+    with grpc.insecure_channel('transaction_verification:50052') as channel:
+        stub = transaction_verification_grpc.TransactionVerificationServiceStub(channel)
+        init_request = transaction_verification.InitializeOrderRequest(
+            orderId=order_id,
+            orderDataJson=json.dumps(order_data)
+        )
+        response = stub.InitializeOrder(init_request)
+    log_tools.debug(f"[Orchestrator] Transaction Verification Init: {response.message}")
+    result_dict['tx_init'] = response.success
+
+@log_tools.log_decorator("Orchestrator")
+def call_initialize_suggestions(order_id, order_data, result_dict):
+    with grpc.insecure_channel('suggestions:50053') as channel:
+        stub = suggestions_grpc.SuggestionsServiceStub(channel)
+        init_request = suggestions.InitializeOrderRequest(
+            orderId=order_id,
+            orderDataJson=json.dumps(order_data)
+        )
+        response = stub.InitializeOrder(init_request)
+    log_tools.debug(f"[Orchestrator] Suggestions Init: {response.message}")
+    result_dict['suggestions_init'] = response.success
+
+@log_tools.log_decorator("Orchestrator")
+def call_enqueue_order(order_id, order_data, result_dict):
+    """
+    Calls the Enqueue RPC on the order queue service.
+    """
+    with grpc.insecure_channel('order_queue:50055') as channel:
+        stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
+        req = oq_pb2.EnqueueRequest(
+            orderId=order_id,
+            orderData=json.dumps(order_data)  # or just pass a string if already serialized
+        )
+        response = stub.Enqueue(req)
+        log_tools.debug(f"[Orchestrator] Enqueue result: {response.message}")
+        result_dict['enqueue'] = response.success
+        result_dict['enqueue_msg'] = response.message
+    
 # --- Updated /checkout route to orchestrate the event flow ---
 @app.route('/checkout', methods=['POST'])
 def checkout():
@@ -209,12 +269,24 @@ def checkout():
     # For simplicity, if all events complete, we approve the order.
     final_status = "Order Approved"
 
+    # If the order is approved, enqueue the order
+    if final_status == "Order Approved":
+        enqueue_result = {}
+        enqueue_thread = threading.Thread(target=call_enqueue_order, args=(order_id, request_data, enqueue_result))
+        log_tools.debug("[Orchestrator] Starting enqueue thread.")
+        enqueue_thread.start()
+        enqueue_thread.join()
+        log_tools.debug(f"[Orchestrator] Enqueue result: {enqueue_result}")
+
+    # Build final response (optionally include enqueue result if needed)
     response_json = {
         "orderId": order_id,
         "status": final_status,
         "suggestedBooks": final_suggestions,
-        "finalVectorClock": final_clock
-    }
+        "finalVectorClock": final_clock,
+        "enqueueSuccess": enqueue_result.get('enqueue', None),
+        "enqueueMessage": enqueue_result.get('enqueue_msg', "")
+}
     return jsonify(response_json)
 
 if __name__ == '__main__':
