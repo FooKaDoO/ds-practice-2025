@@ -30,36 +30,75 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
         response.isCreated = True
         return response
     
-
-    """
-    Implements the TransactionVerificationService gRPC methods.
-    """
     @log_tools.log_decorator("Transaction Verification")
-    def VerifyTransaction(self, request, context):
-        """
-        Validate the transaction based on simple logic.
-        - If creditCardNumber is empty, invalid transaction.
-        - If there are no items in the order, invalid transaction.
-        """
-
+    def VerifyCart(self, request, context):
         response = tx_pb2.TransactionResponse()
 
         order_id = request.order_id
 
+        self.increment(order_id, request.vc)
         entry = self.orders[order_id]
-
-        card_number = entry["order_data"].creditCardNumber or ""
-
-        if len(entry["order_data"].items) == 0:
+        
+        if not entry["order_data"].items:
             response.valid = False
             response.reason = "Empty cart"
             return response
+        
+        response.valid = True
+        response.reason = "Cart contains items."
+        response.vc = entry["vc"]
+        return response
+    
+    @log_tools.log_decorator("Transaction Verification")
+    def VerifyItemQuantities(self, request, context):
+        response = tx_pb2.TransactionResponse()
 
+        order_id = request.order_id
+
+        self.increment(order_id, request.vc)
+        entry = self.orders[order_id]
+        
         for item in entry["order_data"].items:
             if item.quantity <= 0:
                 response.valid = False
                 response.reason = f"Invalid item quantity: {item.quantity} for {item.name}"
                 return response
+        
+        response.valid = True
+        response.reason = "Item quantities are valid."
+        response.vc = entry["vc"]
+        return response
+    
+    @log_tools.log_decorator("Transaction Verification")
+    def VerifyItemNames(self, request, context):
+        response = tx_pb2.TransactionResponse()
+
+        order_id = request.order_id
+
+        self.increment(order_id, request.vc)
+        entry = self.orders[order_id]
+        
+        for item in entry["order_data"].items:
+            if item.name == "":
+                response.valid = False
+                response.reason = f"Invalid item name: '{item.name}';"
+                return response
+        
+        response.valid = True
+        response.reason = "Item names are valid."
+        response.vc = entry["vc"]
+        return response
+
+    @log_tools.log_decorator("Transaction Verification")
+    def VerifyUserData(self, request, context):
+        response = tx_pb2.TransactionResponse()
+
+        order_id = request.order_id
+
+        self.increment(order_id, request.vc)
+        entry = self.orders[order_id]
+
+        card_number = entry["order_data"].creditCardNumber or ""
 
         if not card_number or len(card_number) < 13:
             response.valid = False
@@ -67,10 +106,9 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
             log_tools.debug(f"[Transaction Verification] VerifyTransaction called. valid={response.valid}, reason={response.reason}")
             return response
         
-
-        # If all checks pass
         response.valid = True
-        response.reason = "Transaction is valid."
+        response.reason = "User data is valid."
+        response.vc = entry["vc"]
         log_tools.debug(f"[Transaction Verification] VerifyTransaction called. valid={response.valid}, reason={response.reason}")
         return response
 

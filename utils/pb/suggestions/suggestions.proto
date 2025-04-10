@@ -11,6 +11,7 @@ service SuggestionsService {
 // Request message (we will use the items ordered to suggest similar books)
 message SuggestionsRequest {
     string order_id = 1;
+    repeated int32 vc = 2;
 }
 
 // Item message (each item in the order)
@@ -22,6 +23,7 @@ message Item {
 // Response message (list of suggested books)
 message SuggestionsResponse {
     repeated Book books = 1;
+    repeated int32 vc = 2;
 }
 
 // Book message (represents a suggested book)

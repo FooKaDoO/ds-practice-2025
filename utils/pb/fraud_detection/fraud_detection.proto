@@ -9,6 +9,7 @@ service FraudDetectionService {
 
 message CheckOrderRequest {
     string order_id = 1;
+    repeated int32 vc = 2;
 }
 
 message Item {
@@ -19,6 +20,7 @@ message Item {
 message CheckOrderResponse {
     bool isFraud = 1;
     string reason = 2;
+    repeated int32 vc = 3;
 }
 
 message OrderData {

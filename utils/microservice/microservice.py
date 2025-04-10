@@ -18,17 +18,37 @@ class MicroService:
             "vc": [0]*MicroService._static_microservice_index
         }
     
-    def merge_and_increment(self, local_vc, incoming_vc):
+    def increment(self, order_id: str, incoming_vc=None):
+        entry = self.orders.get(order_id)
+        if not entry:
+            raise Exception(f"Order by {order_id} not found!")
+        
+        local_vc = entry["vc"]
+        
+        local_vc[self.idx] += 1
+        if not incoming_vc:
+            return None
+        
         for i in range(MicroService._static_microservice_index):
             local_vc[i] = max(local_vc[i], incoming_vc[i])
-        local_vc[self.idx] += 1
-    
-    def verify_items(self, order_id, incoming_vc):
+
+    def depends_on(self, order_id, incoming_vc):
+        """ vc1 > vc2 """
         entry = self.orders.get(order_id)
-        self.merge_and_increment(entry["vc"], incoming_vc)
-        if not entry["data"].items():
-            return {"fail": True, "vc": entry["vc"]}
-        return {"fail": False, "vc": entry["vc"]}
+        if not entry:
+            raise Exception(f"Order by {order_id} not found!")
+        
+        local_vc = entry["vc"]
+
+        less, greater = False, False
+
+        for i in range(MicroService._static_microservice_index):
+            if local_vc[i] < incoming_vc[i]:
+                less = True
+            elif local_vc[i] > incoming_vc[i]:
+                greater = True
+        
+        return not less and greater
 
     def _update_length_of_vector_clocks(self):
         for data in self.orders.values():

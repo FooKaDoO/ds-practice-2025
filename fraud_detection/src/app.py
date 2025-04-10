@@ -48,9 +48,8 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         self.init_order(request.order_id, request.order_data)
 
         response.isCreated = True
-        return response
-        
-        
+        return response     
+
 
     """
     Implements the FraudDetectionService from our .proto.

@@ -5,12 +5,16 @@ package transaction;
 // Service definition
 service TransactionVerificationService {
     rpc InitOrder (InitOrderRequest) returns (InitOrderConfirmationResponse);
-    rpc VerifyTransaction (TransactionRequest) returns (TransactionResponse);
+    rpc VerifyCart (TransactionRequest) returns (TransactionResponse);
+    rpc VerifyItemQuantities (TransactionRequest) returns (TransactionResponse);
+    rpc VerifyItemNames (TransactionRequest) returns (TransactionResponse);
+    rpc VerifyUserData (TransactionRequest) returns (TransactionResponse);
 }
 
 // Request message
 message TransactionRequest {
     string order_id = 1;
+    repeated int32 vc = 2;
 }
 
 // Define an item structure
@@ -23,6 +27,7 @@ message Item {
 message TransactionResponse {
     bool valid = 1;
     string reason = 2;
+    repeated int32 vc = 3;
 }
 
 message OrderData {
