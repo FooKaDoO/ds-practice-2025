@@ -72,8 +72,8 @@ def start_election():
     ack_received = False
     for addr in KNOWN_EXECUTORS:
         try:
-            # Assume address format "executor_<id>:port"
-            target_id = int(addr.split("_")[1].split(":")[0])
+            # Assume address format "order_executor_<id>:port"
+            target_id = int(addr.split("_")[2].split(":")[0])
             if target_id > REPLICA_ID:
                 if send_election_message(addr):
                     ack_received = True
