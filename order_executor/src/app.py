@@ -12,6 +12,14 @@ sys.path.insert(0, order_executor_grpc_path)
 from order_executor_pb2 import DequeueRequest, DequeueResponse, ElectionRequest, ElectionResponse, CoordinatorRequest, CoordinatorResponse
 from order_executor_pb2_grpc import add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
 
+
+# Import Order Queue stubs
+order_queue_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_queue'))
+sys.path.insert(0, order_queue_grpc_path)
+import order_queue_pb2 as oq_pb2
+import order_queue_pb2_grpc as oq_pb2_grpc
+
+
 # Import logging utility
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
@@ -115,10 +123,8 @@ class OrderExecutorService(OrderExecutorServiceServicer):
                 return DequeueResponse(success=False, message="Not leader, standing by.")
         try:
             with grpc.insecure_channel('order_queue:50055') as channel:
-                from order_queue_pb2 import DequeueRequest
-                from order_queue_pb2_grpc import OrderQueueServiceStub
-                queue_stub = OrderQueueServiceStub(channel)
-                dq_response = queue_stub.Dequeue(DequeueRequest())
+                queue_stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
+                dq_response = queue_stub.Dequeue(oq_pb2.DequeueRequest())
                 if dq_response.success:
                     log_tools.info(f"[Order Executor] Leader {REPLICA_ID} executing order {dq_response.orderId}.")
                     return DequeueResponse(success=True, message="Order executed", orderId=dq_response.orderId, orderData=dq_response.orderData)
