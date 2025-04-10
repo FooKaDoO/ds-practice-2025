@@ -114,7 +114,7 @@ class OrderExecutorService(OrderExecutorServiceServicer):
                 log_tools.debug(f"[Order Executor] Replica {REPLICA_ID} is not the leader (current leader: {current_leader}).")
                 return DequeueResponse(success=False, message="Not leader, standing by.")
         try:
-            with grpc.insecure_channel('order_queue:50060') as channel:
+            with grpc.insecure_channel('order_queue:50055') as channel:
                 from order_queue_pb2 import DequeueRequest
                 from order_queue_pb2_grpc import OrderQueueServiceStub
                 queue_stub = OrderQueueServiceStub(channel)

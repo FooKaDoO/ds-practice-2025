@@ -54,7 +54,6 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         cached_orders[order_id] = order_data_json
 
         # Initialize the vector clock for this order, e.g. [0,0,0] if you have 3 microservices
-        # If you have just 2 microservices, do [0,0], etc.
         if order_id not in vector_clocks:
             vector_clocks[order_id] = [0,0,0]  # or however many entries you need
 
