@@ -29,6 +29,11 @@ class OrderExecutorServiceStub(object):
                 request_serializer=order__executor__pb2.CoordinatorRequest.SerializeToString,
                 response_deserializer=order__executor__pb2.CoordinatorResponse.FromString,
                 )
+        self.GetLeader = channel.unary_unary(
+                '/orderexecutor.OrderExecutorService/GetLeader',
+                request_serializer=order__executor__pb2.GetLeaderRequest.SerializeToString,
+                response_deserializer=order__executor__pb2.GetLeaderResponse.FromString,
+                )
 
 
 class OrderExecutorServiceServicer(object):
@@ -54,6 +59,12 @@ class OrderExecutorServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLeader(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_OrderExecutorServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -71,6 +82,11 @@ def add_OrderExecutorServiceServicer_to_server(servicer, server):
                     servicer.Coordinator,
                     request_deserializer=order__executor__pb2.CoordinatorRequest.FromString,
                     response_serializer=order__executor__pb2.CoordinatorResponse.SerializeToString,
+            ),
+            'GetLeader': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLeader,
+                    request_deserializer=order__executor__pb2.GetLeaderRequest.FromString,
+                    response_serializer=order__executor__pb2.GetLeaderResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -130,5 +146,22 @@ class OrderExecutorService(object):
         return grpc.experimental.unary_unary(request, target, '/orderexecutor.OrderExecutorService/Coordinator',
             order__executor__pb2.CoordinatorRequest.SerializeToString,
             order__executor__pb2.CoordinatorResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetLeader(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/orderexecutor.OrderExecutorService/GetLeader',
+            order__executor__pb2.GetLeaderRequest.SerializeToString,
+            order__executor__pb2.GetLeaderResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

@@ -9,6 +9,12 @@ service OrderExecutorService {
     // Leader election RPCs
     rpc Election (ElectionRequest) returns (ElectionResponse);
     rpc Coordinator (CoordinatorRequest) returns (CoordinatorResponse);
+    rpc GetLeader(GetLeaderRequest) returns (GetLeaderResponse); 
+}
+
+message GetLeaderRequest {}
+message GetLeaderResponse {
+    int32 leaderId = 1;
 }
 
 message DequeueRequest {
