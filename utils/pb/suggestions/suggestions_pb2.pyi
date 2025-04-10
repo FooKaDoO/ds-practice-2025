@@ -5,7 +5,7 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-class CheckOrderRequest(_message.Message):
+class SuggestionsRequest(_message.Message):
     __slots__ = ("order_id",)
     ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     order_id: str
@@ -19,13 +19,21 @@ class Item(_message.Message):
     quantity: int
     def __init__(self, name: _Optional[str] = ..., quantity: _Optional[int] = ...) -> None: ...
 
-class CheckOrderResponse(_message.Message):
-    __slots__ = ("isFraud", "reason")
-    ISFRAUD_FIELD_NUMBER: _ClassVar[int]
-    REASON_FIELD_NUMBER: _ClassVar[int]
-    isFraud: bool
-    reason: str
-    def __init__(self, isFraud: bool = ..., reason: _Optional[str] = ...) -> None: ...
+class SuggestionsResponse(_message.Message):
+    __slots__ = ("books",)
+    BOOKS_FIELD_NUMBER: _ClassVar[int]
+    books: _containers.RepeatedCompositeFieldContainer[Book]
+    def __init__(self, books: _Optional[_Iterable[_Union[Book, _Mapping]]] = ...) -> None: ...
+
+class Book(_message.Message):
+    __slots__ = ("bookId", "title", "author")
+    BOOKID_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    AUTHOR_FIELD_NUMBER: _ClassVar[int]
+    bookId: str
+    title: str
+    author: str
+    def __init__(self, bookId: _Optional[str] = ..., title: _Optional[str] = ..., author: _Optional[str] = ...) -> None: ...
 
 class OrderData(_message.Message):
     __slots__ = ("items",)
