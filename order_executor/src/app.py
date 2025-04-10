@@ -10,9 +10,13 @@ import re
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
 order_executor_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_executor'))
 sys.path.insert(0, order_executor_grpc_path)
-from order_executor_pb2 import DequeueRequest, DequeueResponse, ElectionRequest, ElectionResponse, CoordinatorRequest, CoordinatorResponse, GetLeaderRequest, GetLeaderResponse
-from order_executor_pb2_grpc import add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
-
+from order_executor_pb2 import (
+    DequeueResponse, ElectionRequest, ElectionResponse,
+    CoordinatorRequest, CoordinatorResponse
+)
+from order_executor_pb2_grpc import (
+    add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
+)
 
 # Import Order Queue stubs
 order_queue_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_queue'))
@@ -20,15 +24,18 @@ sys.path.insert(0, order_queue_grpc_path)
 import order_queue_pb2 as oq_pb2
 import order_queue_pb2_grpc as oq_pb2_grpc
 
-
-# Import logging utility
+# Import logging
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
-# Globals
-REPLICA_ID = int(os.getenv("REPLICA_ID", "1"))
-KNOWN_EXECUTORS = os.getenv("KNOWN_EXECUTORS", "").split(",")  # e.g., ["executor_1:50056", "executor_2:50056"]
+
+# --- Environment Variables ---
+REPLICA_ID = int(os.getenv("REPLICA_ID", "0"))
+KNOWN_EXECUTORS = os.getenv("KNOWN_EXECUTORS", "")
+KNOWN_EXECUTORS = [addr.strip() for addr in KNOWN_EXECUTORS.split(",") if addr.strip()]
+
+# Global state
 current_leader = None
 election_in_progress = False
 leader_lock = threading.RLock()
@@ -99,7 +106,12 @@ def start_election():
 
 # --- Election Monitor ---
 def election_monitor():
+    """
+    Checks if we have a leader; if not, triggers start_election().
+    """
+    global current_leader
     while True:
+        time.sleep(10)
         with leader_lock:
             needs_election = (current_leader is None and not election_in_progress)
 
@@ -160,6 +172,9 @@ class OrderExecutorService(OrderExecutorServiceServicer):
         return _do_dequeue_logic()
 
     def Election(self, request, context):
+        """
+        Called by lower ID replicas. If this replica is higher, it acknowledges => triggers own election => can become leader.
+        """
         sender_id = request.senderId
         log_tools.info(f"[Election] Replica {REPLICA_ID} received Election from {sender_id}")
         if REPLICA_ID > sender_id:
