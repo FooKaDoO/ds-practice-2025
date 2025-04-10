@@ -21,7 +21,7 @@ import log_tools
 class OrderQueueServiceServicer(oq_pb2_grpc.OrderQueueServiceServicer):
     def __init__(self):
         # Use a lock for thread-safety and a PriorityQueue to store orders.
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._pq = PriorityQueue()  # Orders stored as tuples (-priority, orderId, orderData)
 
     @log_tools.log_decorator("OrderQueue")

@@ -4,6 +4,7 @@ import grpc
 import time
 import threading
 from concurrent import futures
+import re
 
 # --- Set Up Paths and Import Stubs ---
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
@@ -35,7 +36,20 @@ KNOWN_EXECUTORS = [addr.strip() for addr in KNOWN_EXECUTORS.split(",") if addr.s
 
 # Global state
 current_leader = None
-leader_lock = threading.Lock()
+election_in_progress = False
+leader_lock = threading.RLock()
+
+# --- Helper ---
+def parse_replica_id(addr):
+    try:
+        match = re.search(r"_(\d+):", addr)
+        if match:
+            return int(match.group(1))
+        else:
+            raise ValueError("No numeric ID found in address")
+    except Exception as e:
+        log_tools.error(f"[Election] Could not parse replica ID from {addr}: {e}")
+        return -1
 
 # Track whether this node is in an election to avoid repeated triggers
 in_election = False
@@ -46,13 +60,13 @@ def send_election_message(target_addr: str) -> bool:
     Sends an Election RPC to target_addr. Returns True if the target (a higher ID) acknowledges.
     """
     try:
-        channel = grpc.insecure_channel(target_addr)
-        stub = OrderExecutorServiceStub(channel)
-        response = stub.Election(ElectionRequest(senderId=REPLICA_ID))
-        log_tools.debug(f"[Election] Received response from {target_addr}: {response.acknowledged}")
-        return response.acknowledged
+        with grpc.insecure_channel(target_addr) as channel:
+            stub = OrderExecutorServiceStub(channel)
+            response = stub.Election(ElectionRequest(senderId=REPLICA_ID))
+            log_tools.debug(f"[Election] Response from {target_addr}: {response.acknowledged}")
+            return response.acknowledged
     except Exception as e:
-        log_tools.error(f"[Election] Error contacting {target_addr}: {e}")
+        log_tools.error(f"[Election] Failed to contact {target_addr}: {e}")
         return False
 
 def broadcast_coordinator(new_leader: int):
@@ -114,6 +128,37 @@ def start_election():
     with election_lock:
         in_election = False
 
+def start_election():
+    global current_leader, election_in_progress
+
+    with leader_lock:
+        if election_in_progress:
+            return None
+        election_in_progress = True
+
+    log_tools.info(f"[Election] Replica {REPLICA_ID} starting election...")
+    ack_received = False
+
+    for addr in KNOWN_EXECUTORS:
+        target_id = parse_replica_id(addr)
+        if target_id > REPLICA_ID:
+            if send_election_message(addr):
+                ack_received = True
+                log_tools.info(f"[Election] Replica {target_id} acknowledged our election.")
+
+    time.sleep(5)  # Don't block lock here
+
+    with leader_lock:
+        if current_leader is None and not ack_received:
+            current_leader = REPLICA_ID
+            log_tools.info(f"[Election] Replica {REPLICA_ID} becomes leader.")
+            broadcast_coordinator(current_leader)
+        else:
+            log_tools.debug(f"[Election] Leader already set to {current_leader}, skipping broadcast.")
+
+        election_in_progress = False
+
+# --- Election Monitor ---
 def election_monitor():
     """
     Checks if we have a leader; if not, triggers start_election().
