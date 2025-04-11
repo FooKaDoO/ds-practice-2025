@@ -3,6 +3,7 @@ import os
 import grpc
 from concurrent import futures
 import cohere
+import json
 
 # Import the generated gRPC stubs
 FILE = __file__ if "__file__" in globals() else os.getenv("PYTHONFILE", "")

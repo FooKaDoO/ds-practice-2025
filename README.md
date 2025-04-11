@@ -8,13 +8,30 @@ This repository is a **distributed systems** practice project, demonstrating a *
 
 **ds-practice-2025** showcases:
 
-- **Frontend** (HTML + JavaScript) sending orders via REST to an **Orchestrator**.
-- The **Orchestrator** spawns **threads** to call:
-  - **Fraud Detection** microservice (AI-based).
-  - **Transaction Verification** microservice (basic transaction checks).
-  - **Suggestions** microservice (AI-based book suggestions).
-- The microservices communicate with the orchestrator via **gRPC**.
-- The final result (approved/rejected) plus any suggestions is returned to the user.
+- **Frontend:** A simple HTML/JS page to submit orders.
+- **Orchestrator:** A Flask service that receives orders, generates a unique OrderID, and orchestrates parallel gRPC calls to backend services.
+- **Fraud Detection:** Uses an ML model (or dummy logic) to evaluate if an order is suspicious. (Port 50051)
+- **Transaction Verification:** Checks order data including items, user and billing info, and credit card details using vector clocks. (Port 50052)
+- **Suggestions:** Generates book recommendations via an AI service (e.g., Cohere). (Port 50053)
+- **Order Queue:** Maintains a priority queue of orders; orders are enqueued and later dequeued for processing. (Port 50055)
+- **Order Executor:** Replicated service that uses leader election (Bully algorithm) to ensure only the designated leader dequeues and executes orders. (Port 50056)
+
+---
+
+
+## Key Features in This Checkpoint
+
+- **Event Ordering:**  
+  Services update a vector clock as events occur (e.g., transaction checks, fraud detection, suggestions), ensuring a coherent order of operations.
+
+- **Leader Election:**  
+  The Order Executor uses a Bully-style algorithm for leader election. Each executor (replica) has a unique `REPLICA_ID`, and the leader (if not already set) is determined among the replicas. The leader is responsible for dequeuing orders from the Order Queue.
+
+- **Priority Order Queue:**  
+  Orders are enqueued with a priority value (implemented with Python’s `PriorityQueue`), so that orders can be dequeued based on their priority.
+
+- **Automatic Polling:**  
+  The Order Executor automatically polls the Order Queue every 10 seconds to check for new orders. If the queue is empty, it logs the lack of available orders.
 
 ---
 

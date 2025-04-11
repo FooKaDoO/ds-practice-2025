@@ -9,31 +9,41 @@ from concurrent import futures
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
 order_executor_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_executor'))
 sys.path.insert(0, order_executor_grpc_path)
-from order_executor_pb2 import DequeueRequest, DequeueResponse, ElectionRequest, ElectionResponse, CoordinatorRequest, CoordinatorResponse
-from order_executor_pb2_grpc import add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
+from order_executor_pb2 import (
+    DequeueResponse, ElectionRequest, ElectionResponse,
+    CoordinatorRequest, CoordinatorResponse
+)
+from order_executor_pb2_grpc import (
+    add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
+)
 
-# Import logging utility
+# Import Order Queue stubs
+order_queue_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/order_queue'))
+sys.path.insert(0, order_queue_grpc_path)
+import order_queue_pb2 as oq_pb2
+import order_queue_pb2_grpc as oq_pb2_grpc
+
+# Import logging
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
-# --- Environment Variables and Globals ---
-# Each replica must have a unique REPLICA_ID.
+# --- Environment Variables ---
 REPLICA_ID = int(os.getenv("REPLICA_ID", "0"))
-# KNOWN_EXECUTORS should be a comma-separated list of executor addresses (e.g., "executor_0:50056,executor_1:50056")
 KNOWN_EXECUTORS = os.getenv("KNOWN_EXECUTORS", "")
 KNOWN_EXECUTORS = [addr.strip() for addr in KNOWN_EXECUTORS.split(",") if addr.strip()]
 
-# Global variable to hold the current leader's ID (protected by a lock)
+# Global state
 current_leader = None
 leader_lock = threading.Lock()
 
-# --- Leader Election Methods ---
+# Track whether this node is in an election to avoid repeated triggers
+in_election = False
+election_lock = threading.Lock()
 
-def send_election_message(target_addr):
+def send_election_message(target_addr: str) -> bool:
     """
-    Sends an Election RPC to the target executor.
-    Returns True if the target acknowledges (i.e., has a higher ID).
+    Sends an Election RPC to target_addr. Returns True if the target (a higher ID) acknowledges.
     """
     try:
         channel = grpc.insecure_channel(target_addr)
@@ -45,13 +55,12 @@ def send_election_message(target_addr):
         log_tools.error(f"[Election] Error contacting {target_addr}: {e}")
         return False
 
-def broadcast_coordinator(new_leader):
+def broadcast_coordinator(new_leader: int):
     """
-    Sends a Coordinator RPC to all known executor replicas.
+    Sends Coordinator RPC to all known executors to inform them of the new leader.
     """
-    from order_executor_pb2 import CoordinatorRequest
     for addr in KNOWN_EXECUTORS:
-        if addr:  # ensure not empty
+        if addr:
             try:
                 channel = grpc.insecure_channel(addr)
                 stub = OrderExecutorServiceStub(channel)
@@ -61,108 +70,169 @@ def broadcast_coordinator(new_leader):
                 log_tools.error(f"[Election] Failed to notify {addr}: {e}")
 
 def start_election():
-    """
-    Implements a simple Bully algorithm:
-      - Send Election RPCs to all replicas with higher IDs.
-      - If no higher-ID replica acknowledges, declare self as leader.
-      - Otherwise, wait for a Coordinator broadcast.
-    """
-    global current_leader
+    global current_leader, in_election
+    with election_lock:
+        if in_election:
+            # Already in election, skip
+            return
+        in_election = True
+
     log_tools.info(f"[Election] Replica {REPLICA_ID} starting election...")
-    ack_received = False
+
+    # Step 1: Send Election messages to all higher-ID replicas
+    higher_exists = False
     for addr in KNOWN_EXECUTORS:
         try:
-            # Assume address format "executor_<id>:port"
-            target_id = int(addr.split("_")[1].split(":")[0])
+            target_id = int(addr.split("_")[2].split(":")[0])
             if target_id > REPLICA_ID:
-                if send_election_message(addr):
-                    ack_received = True
-                    log_tools.info(f"[Election] Replica {target_id} acknowledged our election.")
+                higher_exists = True
+                acknowledged = send_election_message(addr)
+                if acknowledged:
+                    log_tools.info(f"[Election] Higher ID {target_id} acknowledged our election request.")
         except Exception as e:
             log_tools.error(f"[Election] Error parsing address {addr}: {e}")
+
+    # Step 2: If no higher ID exists, become leader immediately
+    if not higher_exists:
+        with leader_lock:
+            current_leader = REPLICA_ID
+        broadcast_coordinator(current_leader)
+        log_tools.info(f"[Election] Replica {REPLICA_ID} is the highest ID => leader immediately.")
+        with election_lock:
+            in_election = False
+        return
+
+    # Step 3: If a higher ID exists, wait some time for a Coordinator
+    time.sleep(5)
+
+    # If we still don't have a leader, assume leadership
     with leader_lock:
-        if not ack_received:
+        if current_leader is None:
             current_leader = REPLICA_ID
             broadcast_coordinator(current_leader)
-            log_tools.info(f"[Election] Replica {REPLICA_ID} becomes leader (no higher replica acknowledged).")
-        else:
-            # Wait for some time to receive a Coordinator message
-            time.sleep(5)
-            if current_leader is None:
-                current_leader = REPLICA_ID
-                broadcast_coordinator(current_leader)
-                log_tools.info(f"[Election] Timeout reached. Replica {REPLICA_ID} elects itself as leader.")
+            log_tools.info(f"[Election] Timeout => Replica {REPLICA_ID} elects itself leader.")
+    with election_lock:
+        in_election = False
 
 def election_monitor():
     """
-    Periodically check if a leader is assigned; if not, start election.
+    Checks if we have a leader; if not, triggers start_election().
     """
     global current_leader
     while True:
+        time.sleep(10)
         with leader_lock:
             if current_leader is None:
                 start_election()
-        time.sleep(10)
 
-# --- Order Executor Service Implementation ---
+# --- Order Executor Service ---
 class OrderExecutorService(OrderExecutorServiceServicer):
-    @log_tools.log_decorator("Order Executor")
-    def DequeueAndExecute(self, request, context):
+    def process_order(self):
+        """
+        Called automatically by polling loop. Only the leader can execute an order.
+        """
+        log_tools.info(f"[Order Executor] process_order invoked (Replica {REPLICA_ID}).")
         global current_leader
         with leader_lock:
-            if current_leader != REPLICA_ID:
-                log_tools.debug(f"[Order Executor] Replica {REPLICA_ID} is not the leader (current leader: {current_leader}).")
-                return DequeueResponse(success=False, message="Not leader, standing by.")
+            effective_leader = current_leader if current_leader is not None else REPLICA_ID
+            if effective_leader != REPLICA_ID:
+                log_tools.debug(f"[Order Executor] Not leader => skip. Leader is {effective_leader}")
+                return
+        # We are the leader => Dequeue
         try:
-            with grpc.insecure_channel('order_queue:50060') as channel:
-                from order_queue_pb2 import DequeueRequest
-                from order_queue_pb2_grpc import OrderQueueServiceStub
-                queue_stub = OrderQueueServiceStub(channel)
-                dq_response = queue_stub.Dequeue(DequeueRequest())
+            with grpc.insecure_channel('order_queue:50055') as channel:
+                stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
+                log_tools.info("[Order Executor] Leader polling => Dequeue call")
+                dq_response = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
+                log_tools.info(f"[Order Executor] Dequeue returned: {dq_response}")
                 if dq_response.success:
                     log_tools.info(f"[Order Executor] Leader {REPLICA_ID} executing order {dq_response.orderId}.")
-                    return DequeueResponse(success=True, message="Order executed", orderId=dq_response.orderId, orderData=dq_response.orderData)
                 else:
-                    log_tools.debug(f"[Order Executor] Leader {REPLICA_ID}: No orders available.")
+                    log_tools.debug("[Order Executor] No orders available.")
+        except Exception as e:
+            log_tools.error(f"[Order Executor] Exception polling queue: {e}")
+
+    def DequeueAndExecute(self, request, context):
+        """
+        RPC: Force an immediate attempt to dequeue an order. Only the leader can do so.
+        """
+        log_tools.info(f"[Order Executor] DequeueAndExecute called on replica {REPLICA_ID}.")
+        global current_leader
+        with leader_lock:
+            effective_leader = current_leader if current_leader is not None else REPLICA_ID
+            if effective_leader != REPLICA_ID:
+                return DequeueResponse(success=False, message="Not leader, standing by.")
+
+        # We are the leader => attempt Dequeue
+        try:
+            with grpc.insecure_channel('order_queue:50055') as channel:
+                stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
+                dq_response = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
+                log_tools.info(f"[Order Executor] DequeueAndExecute => {dq_response}")
+                if dq_response.success:
+                    log_tools.info(f"[Order Executor] Leader {REPLICA_ID} executing order {dq_response.orderId}.")
+                    return DequeueResponse(
+                        success=True,
+                        message="Order executed",
+                        orderId=dq_response.orderId,
+                        orderData=dq_response.orderData
+                    )
+                else:
                     return DequeueResponse(success=False, message="No orders available")
         except Exception as e:
-            log_tools.error(f"[Order Executor] Leader {REPLICA_ID}: Exception during dequeue: {e}")
+            log_tools.error(f"[Order Executor] Exception => {e}")
             return DequeueResponse(success=False, message=str(e))
 
-    @log_tools.log_decorator("Election")
     def Election(self, request, context):
+        """
+        Called by lower ID replicas. If this replica is higher, it acknowledges => triggers own election => can become leader.
+        """
         sender_id = request.senderId
         log_tools.info(f"[Election] Replica {REPLICA_ID} received Election from {sender_id}.")
-        # Acknowledge if our ID is greater.
         if REPLICA_ID > sender_id:
-            log_tools.info(f"[Election] Replica {REPLICA_ID} acknowledges Election from {sender_id}.")
+            log_tools.info(f"[Election] Replica {REPLICA_ID} acknowledges => will start own election.")
+            # Start election in background, so we don't block this RPC
+            threading.Thread(target=start_election, daemon=True).start()
             return ElectionResponse(acknowledged=True)
         else:
-            log_tools.info(f"[Election] Replica {REPLICA_ID} does not acknowledge Election from {sender_id}.")
+            log_tools.info(f"[Election] Replica {REPLICA_ID} does not acknowledge => lower ID or same.")
             return ElectionResponse(acknowledged=False)
 
-    @log_tools.log_decorator("Election")
     def Coordinator(self, request, context):
+        """
+        Called when a node declares itself leader => updates current_leader here.
+        """
         new_leader = request.leaderId
+        log_tools.info(f"[Election] Received Coordinator => new leader is {new_leader}.")
+        global current_leader
         with leader_lock:
-            global current_leader
             current_leader = new_leader
-        log_tools.info(f"[Election] Replica {REPLICA_ID} sets leader to {new_leader} upon receiving Coordinator.")
         return CoordinatorResponse(success=True)
 
-# --- Server Setup ---
+# Server Setup
 def serve():
+    exec_service = OrderExecutorService()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    # Add the combined service (order execution and election)
-    add_OrderExecutorServiceServicer_to_server(OrderExecutorService(), server)
-    port = "50056"  # Port for the Order Executor service
+    add_OrderExecutorServiceServicer_to_server(exec_service, server)
+    port = "50056"
     server.add_insecure_port(f"[::]:{port}")
-    log_tools.info(f"[Order Executor] Replica {REPLICA_ID} is listening on port {port}...")
+    log_tools.info(f"[Order Executor] Replica {REPLICA_ID} => listening on {port}")
     server.start()
-    # Start the election monitor on a background thread.
+
+    # Election monitor => ensures we have a leader eventually
     threading.Thread(target=election_monitor, daemon=True).start()
+
+    # Polling loop => tries to process orders every 10s
+    def polling_loop():
+        log_tools.info("[Order Executor] Starting polling loop.")
+        while True:
+            time.sleep(10)
+            exec_service.process_order()
+
+    threading.Thread(target=polling_loop, daemon=True).start()
+
     while True:
-        time.sleep(10)
+        time.sleep(999999)
 
 if __name__ == '__main__':
     serve()

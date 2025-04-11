@@ -31,7 +31,7 @@ class OrderQueueServiceServicer(oq_pb2_grpc.OrderQueueServiceServicer):
             priority = request.priority
             self._pq.put((-priority, request.orderId, request.orderData))
             msg = f"Order {request.orderId} enqueued with priority {priority}."
-            log_tools.debug(msg)
+            log_tools.debug("[OrderQueue] " + msg)
         return oq_pb2.EnqueueResponse(success=True, message=msg)
 
     @log_tools.log_decorator("OrderQueue")
@@ -40,11 +40,11 @@ class OrderQueueServiceServicer(oq_pb2_grpc.OrderQueueServiceServicer):
             if not self._pq.empty():
                 neg_priority, order_id, order_data = self._pq.get()
                 msg = f"Order {order_id} dequeued."
-                log_tools.debug(msg)
+                log_tools.debug("[OrderQueue] " + msg)
                 return oq_pb2.DequeueResponse(success=True, message=msg, orderId=order_id, orderData=order_data)
             else:
                 msg = "Queue is empty."
-                log_tools.debug(msg)
+                log_tools.debug("[OrderQueue] " + msg)
                 return oq_pb2.DequeueResponse(success=False, message=msg, orderId="", orderData="")
 
 def serve():
