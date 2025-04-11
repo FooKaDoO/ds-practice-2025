@@ -14,25 +14,27 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x66raud_detection.proto\x12\x05\x66raud\"%\n\x11\x43heckOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"&\n\x04Item\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"5\n\x12\x43heckOrderResponse\x12\x0f\n\x07isFraud\x18\x01 \x01(\x08\x12\x0e\n\x06reason\x18\x02 \x01(\t\"\'\n\tOrderData\x12\x1a\n\x05items\x18\x01 \x03(\x0b\x32\x0b.fraud.Item\"J\n\x10InitOrderRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12$\n\norder_data\x18\x02 \x01(\x0b\x32\x10.fraud.OrderData\"2\n\x1dInitOrderConfirmationResponse\x12\x11\n\tisCreated\x18\x01 \x01(\x08\x32\xa6\x01\n\x15\x46raudDetectionService\x12J\n\tInitOrder\x12\x17.fraud.InitOrderRequest\x1a$.fraud.InitOrderConfirmationResponse\x12\x41\n\nCheckOrder\x12\x18.fraud.CheckOrderRequest\x1a\x19.fraud.CheckOrderResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x66raud_detection.proto\x12\x05\x66raud\"@\n\x16InitializeOrderRequest\x12\x0f\n\x07orderId\x18\x01 \x01(\t\x12\x15\n\rorderDataJson\x18\x02 \x01(\t\";\n\x17InitializeOrderResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"D\n\x11\x43heckOrderRequest\x12\x13\n\x0btotalAmount\x18\x01 \x01(\x02\x12\x1a\n\x05items\x18\x02 \x03(\x0b\x32\x0b.fraud.Item\"&\n\x04Item\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08quantity\x18\x02 \x01(\x05\"5\n\x12\x43heckOrderResponse\x12\x0f\n\x07isFraud\x18\x01 \x01(\x08\x12\x0e\n\x06reason\x18\x02 \x01(\t\"P\n\x11\x43heckFraudRequest\x12\x0f\n\x07orderId\x18\x01 \x01(\t\x12\x13\n\x0bvectorClock\x18\x02 \x03(\x05\x12\x15\n\rorderDataJson\x18\x03 \x01(\t\"K\n\x12\x43heckFraudResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0e\n\x06reason\x18\x02 \x01(\t\x12\x14\n\x0cupdatedClock\x18\x03 \x03(\x05\x32\xba\x02\n\x15\x46raudDetectionService\x12P\n\x0fInitializeOrder\x12\x1d.fraud.InitializeOrderRequest\x1a\x1e.fraud.InitializeOrderResponse\x12\x41\n\nCheckOrder\x12\x18.fraud.CheckOrderRequest\x1a\x19.fraud.CheckOrderResponse\x12\x45\n\x0e\x43heckUserFraud\x12\x18.fraud.CheckFraudRequest\x1a\x19.fraud.CheckFraudResponse\x12\x45\n\x0e\x43heckCardFraud\x12\x18.fraud.CheckFraudRequest\x1a\x19.fraud.CheckFraudResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'fraud_detection_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_CHECKORDERREQUEST']._serialized_start=32
-  _globals['_CHECKORDERREQUEST']._serialized_end=69
-  _globals['_ITEM']._serialized_start=71
-  _globals['_ITEM']._serialized_end=109
-  _globals['_CHECKORDERRESPONSE']._serialized_start=111
-  _globals['_CHECKORDERRESPONSE']._serialized_end=164
-  _globals['_ORDERDATA']._serialized_start=166
-  _globals['_ORDERDATA']._serialized_end=205
-  _globals['_INITORDERREQUEST']._serialized_start=207
-  _globals['_INITORDERREQUEST']._serialized_end=281
-  _globals['_INITORDERCONFIRMATIONRESPONSE']._serialized_start=283
-  _globals['_INITORDERCONFIRMATIONRESPONSE']._serialized_end=333
-  _globals['_FRAUDDETECTIONSERVICE']._serialized_start=336
-  _globals['_FRAUDDETECTIONSERVICE']._serialized_end=502
+  _globals['_INITIALIZEORDERREQUEST']._serialized_start=32
+  _globals['_INITIALIZEORDERREQUEST']._serialized_end=96
+  _globals['_INITIALIZEORDERRESPONSE']._serialized_start=98
+  _globals['_INITIALIZEORDERRESPONSE']._serialized_end=157
+  _globals['_CHECKORDERREQUEST']._serialized_start=159
+  _globals['_CHECKORDERREQUEST']._serialized_end=227
+  _globals['_ITEM']._serialized_start=229
+  _globals['_ITEM']._serialized_end=267
+  _globals['_CHECKORDERRESPONSE']._serialized_start=269
+  _globals['_CHECKORDERRESPONSE']._serialized_end=322
+  _globals['_CHECKFRAUDREQUEST']._serialized_start=324
+  _globals['_CHECKFRAUDREQUEST']._serialized_end=404
+  _globals['_CHECKFRAUDRESPONSE']._serialized_start=406
+  _globals['_CHECKFRAUDRESPONSE']._serialized_end=481
+  _globals['_FRAUDDETECTIONSERVICE']._serialized_start=484
+  _globals['_FRAUDDETECTIONSERVICE']._serialized_end=798
 # @@protoc_insertion_point(module_scope)

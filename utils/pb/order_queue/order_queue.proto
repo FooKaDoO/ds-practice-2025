@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package orderqueue;
+
+service OrderQueueService {
+    rpc Enqueue (EnqueueRequest) returns (EnqueueResponse);
+    rpc Dequeue (DequeueRequest) returns (DequeueResponse);
+}
+
+message EnqueueRequest {
+    string orderId = 1;
+    string orderData = 2; // Order information as JSON
+    int32 priority = 3;   // Higher values indicate higher priority
+}
+
+message EnqueueResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message DequeueRequest {
+    // For now, no fields needed, or you could add optional fields for filtering
+}
+
+message DequeueResponse {
+    bool success = 1;
+    string message = 2;
+    string orderId = 3;
+    string orderData = 4;
+}

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package orderexecutor;
+
+service OrderExecutorService {
+    // Order execution RPC
+    rpc DequeueAndExecute (DequeueRequest) returns (DequeueResponse);
+
+    // Leader election RPCs
+    rpc Election (ElectionRequest) returns (ElectionResponse);
+    rpc Coordinator (CoordinatorRequest) returns (CoordinatorResponse);
+    rpc GetLeader(GetLeaderRequest) returns (GetLeaderResponse); 
+}
+
+message GetLeaderRequest {}
+message GetLeaderResponse {
+    int32 leaderId = 1;
+}
+
+message DequeueRequest {
+    // You might have fields here if necessary
+}
+
+message DequeueResponse {
+    bool success = 1;
+    string message = 2;
+    string orderId = 3;
+    string orderData = 4;
+}
+
+message ElectionRequest {
+    int32 senderId = 1;  // ID of the node that initiated the election
+}
+
+message ElectionResponse {
+    bool acknowledged = 1;  // "OK" response
+}
+
+message CoordinatorRequest {
+    int32 leaderId = 1;   // The elected leader's ID
+}
+
+message CoordinatorResponse {
+    bool success = 1;
+}

@@ -4,13 +4,14 @@ package suggestions;
 
 // Service definition
 service SuggestionsService {
-    rpc InitOrder (InitOrderRequest) returns (InitOrderConfirmationResponse);
     rpc GetBookSuggestions (SuggestionsRequest) returns (SuggestionsResponse);
+    rpc InitializeOrder (InitializeOrderRequest) returns (InitializeOrderResponse);
+    rpc GenerateSuggestions (GenerateSuggestionsRequest) returns (GenerateSuggestionsResponse);
 }
 
 // Request message (we will use the items ordered to suggest similar books)
 message SuggestionsRequest {
-    string order_id = 1;
+    repeated Item items = 1;
 }
 
 // Item message (each item in the order)
@@ -24,6 +25,16 @@ message SuggestionsResponse {
     repeated Book books = 1;
 }
 
+message InitializeOrderRequest {
+    string orderId = 1;
+    string orderDataJson = 2;
+}
+
+message InitializeOrderResponse {
+    bool success = 1;
+    string message = 2;
+}
+
 // Book message (represents a suggested book)
 message Book {
     string bookId = 1;
@@ -31,15 +42,15 @@ message Book {
     string author = 3;
 }
 
-message OrderData {
-    repeated Item items = 1;
+message GenerateSuggestionsRequest {
+    string orderId = 1;
+    repeated int32 vectorClock = 2;
+    // string orderDataJson = 3;
 }
 
-message InitOrderRequest {
-    string order_id = 1;
-    OrderData order_data = 2;
-}
-
-message InitOrderConfirmationResponse {
-    bool isCreated = 1;
+message GenerateSuggestionsResponse {
+    bool success = 1;
+    string reason = 2;
+    repeated int32 updatedClock = 3;
+    repeated Book books = 4;
 }
