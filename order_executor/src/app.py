@@ -12,7 +12,8 @@ order_executor_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb
 sys.path.insert(0, order_executor_grpc_path)
 from order_executor_pb2 import (
     DequeueResponse, ElectionRequest, ElectionResponse,
-    CoordinatorRequest, CoordinatorResponse
+    CoordinatorRequest, CoordinatorResponse,
+    GetLeaderRequest, GetLeaderResponse
 )
 from order_executor_pb2_grpc import (
     add_OrderExecutorServiceServicer_to_server, OrderExecutorServiceServicer, OrderExecutorServiceStub
@@ -33,6 +34,7 @@ import log_tools
 REPLICA_ID = int(os.getenv("REPLICA_ID", "0"))
 KNOWN_EXECUTORS = os.getenv("KNOWN_EXECUTORS", "")
 KNOWN_EXECUTORS = [addr.strip() for addr in KNOWN_EXECUTORS.split(",") if addr.strip()]
+KNOWN_EXECUTORS = [addr for addr in KNOWN_EXECUTORS if f"_{REPLICA_ID}:" not in addr]
 
 # Global state
 current_leader = None
@@ -82,51 +84,6 @@ def broadcast_coordinator(new_leader: int):
                 log_tools.info(f"[Election] Notified {addr} that leader is {new_leader}")
             except Exception as e:
                 log_tools.error(f"[Election] Failed to notify {addr}: {e}")
-
-def start_election():
-    global current_leader, in_election
-    with election_lock:
-        if in_election:
-            # Already in election, skip
-            return
-        in_election = True
-
-    log_tools.info(f"[Election] Replica {REPLICA_ID} starting election...")
-
-    # Step 1: Send Election messages to all higher-ID replicas
-    higher_exists = False
-    for addr in KNOWN_EXECUTORS:
-        try:
-            target_id = int(addr.split("_")[2].split(":")[0])
-            if target_id > REPLICA_ID:
-                higher_exists = True
-                acknowledged = send_election_message(addr)
-                if acknowledged:
-                    log_tools.info(f"[Election] Higher ID {target_id} acknowledged our election request.")
-        except Exception as e:
-            log_tools.error(f"[Election] Error parsing address {addr}: {e}")
-
-    # Step 2: If no higher ID exists, become leader immediately
-    if not higher_exists:
-        with leader_lock:
-            current_leader = REPLICA_ID
-        broadcast_coordinator(current_leader)
-        log_tools.info(f"[Election] Replica {REPLICA_ID} is the highest ID => leader immediately.")
-        with election_lock:
-            in_election = False
-        return
-
-    # Step 3: If a higher ID exists, wait some time for a Coordinator
-    time.sleep(5)
-
-    # If we still don't have a leader, assume leadership
-    with leader_lock:
-        if current_leader is None:
-            current_leader = REPLICA_ID
-            broadcast_coordinator(current_leader)
-            log_tools.info(f"[Election] Timeout => Replica {REPLICA_ID} elects itself leader.")
-    with election_lock:
-        in_election = False
 
 def start_election():
     global current_leader, election_in_progress
@@ -253,6 +210,10 @@ class OrderExecutorService(OrderExecutorServiceServicer):
         with leader_lock:
             current_leader = new_leader
         return CoordinatorResponse(success=True)
+    
+    def GetLeader(self, request, context):
+        global current_leader
+        return GetLeaderResponse(leaderId=current_leader if current_leader is not None else -1)
 
 # Server Setup
 def serve():
