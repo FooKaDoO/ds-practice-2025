@@ -1,4 +1,5 @@
 version: '3'
+
 services:
   frontend:
     build:
@@ -33,6 +34,7 @@ services:
       # The PYTHONFILE environment variable specifies the absolute entry point of the application
       # Check app.py in the orchestrator directory to see how this is used
       - PYTHONFILE=/app/orchestrator/src/app.py
+      - BOOKS_DB_PRIMARY=books_0:50070
     volumes:
       # Mount the utils directory in the current directory to the /app/utils directory in the container
       - ./utils:/app/utils
@@ -199,4 +201,63 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./order_executor/src:/app/order_executor/src
-   
+
+  books_0:
+    build:
+      context: ./
+      dockerfile: ./books/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
+    ports:
+      - "50070:50070"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - REPLICA_ID=0
+      - INITIAL_STOCK_FILE=initial_stock.json
+      - BACKUP_ADDRS=books_1:50070,books_2:50070
+      - PYTHONFILE=/app/books/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./books/src:/app/books/src
+      - ./books/src/initial_stock.json:/app/books/src/initial_stock.json
+
+  books_1:
+    build:
+      context: ./
+      dockerfile: ./books/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
+    ports:
+      - "50071:50070"   # map host 50071 → container 50070
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - REPLICA_ID=1
+      - INITIAL_STOCK_FILE=initial_stock.json
+      - BACKUP_ADDRS=books_0:50070,books_2:50070
+      - PYTHONFILE=/app/books/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./books/src:/app/books/src
+      - ./books/src/initial_stock.json:/app/books/src/initial_stock.json
+
+  books_2:
+    build:
+      context: ./
+      dockerfile: ./books/Dockerfile
+    depends_on:
+      logger:
+        condition: service_started
+    ports:
+      - "50072:50070"   # map host 50072 → container 50070
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - REPLICA_ID=2
+      - INITIAL_STOCK_FILE=initial_stock.json
+      - BACKUP_ADDRS=books_0:50070,books_1:50070
+      - PYTHONFILE=/app/books/src/app.py
+    volumes:
+      - ./utils:/app/utils
+      - ./books/src:/app/books/src
+      - ./books/src/initial_stock.json:/app/books/src/initial_stock.json

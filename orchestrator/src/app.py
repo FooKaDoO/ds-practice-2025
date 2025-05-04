@@ -32,6 +32,12 @@ sys.path.insert(0, order_queue_grpc_path)
 import order_queue_pb2 as oq_pb2
 import order_queue_pb2_grpc as oq_pb2_grpc
 
+# Import the generated gRPC stubs for Books Database
+books_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/books'))
+sys.path.insert(0, books_grpc_path)
+import books_pb2
+import books_pb2_grpc
+
 # Import the logging utility
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
@@ -40,9 +46,23 @@ import log_tools
 app = Flask(__name__)
 CORS(app, resources={r'/*': {'origins': '*'}})
 
+
+# ------------------------------------------------------------------
+# Setup a single stub to primary Books Database for stock updates
+# ------------------------------------------------------------------
+_db_channel = grpc.insecure_channel(os.getenv('BOOKS_DB_PRIMARY', 'books_db_0:50070'))
+_db_stub    = books_pb2_grpc.BooksDatabaseStub(_db_channel)
+
+
+def update_stock(title: str, qty: int):
+    # Read ncurrent stock
+    resp = _db_stub.DecrementStock(books_pb2.DecrementRequest(title=title, amount=qty))
+    if not resp.success:
+        raise ValueError("Insufficient or concurrent conflict")
 # --------------------------
 # RPC Helper Functions
 # --------------------------
+
 @log_tools.log_decorator("Orchestrator")
 def call_verify_items(order_id, current_clock, order_data, result_dict):
     """
@@ -211,6 +231,26 @@ def call_enqueue_order(order_id, order_data, result_dict):
 # --------------------------
 # /checkout Route Implementation
 # --------------------------
+
+KNOWN_TITLES = [
+    "Harry Potter",
+    "Twilight",
+    "Lord of the Rings",
+    "Clean Code"
+]
+
+@app.route('/api/books', methods=['GET'])
+def list_books():
+    catalog = []
+    for title in KNOWN_TITLES:
+        try:
+            resp = _db_stub.Read(books_pb2.ReadRequest(title=title))
+            catalog.append({"title": title, "stock": resp.stock})
+        except Exception as e:
+            # if the DB is unavailable, just show stock=0
+            catalog.append({"title": title, "stock": 0})
+    return jsonify(catalog)
+
 @app.route('/checkout', methods=['POST'])
 def checkout():
     """
@@ -346,12 +386,26 @@ def checkout():
     enqueue_thread.start()
     enqueue_thread.join()
     log_tools.debug(f"[Orchestrator] Enqueue result: {enqueue_result}")
+
     
-    # ----- Step 6: Build the Final JSON Response -----
+    # 6. Update stocks for each item in Books DB
+    try:
+        for item in request_data.get('items', []):
+            update_stock(item['name'], item['quantity'])
+        log_tools.info("[Orchestrator] Stock updated successfully for all items.")
+    except Exception as e:
+        log_tools.error(f"[Orchestrator] Stock update failed: {e}")
+        return jsonify({
+            'orderId': order_id,
+            'status': 'Order Rejected. Stock update failed.',
+            'suggestedBooks': [],
+            'error': {'message': str(e)}
+        }), 500
+    
+    # ----- Step 7: Build the Final JSON Response -----
     response_json = {
         "orderId": order_id,
         "status": final_status,
-          # Always include a message field
         "suggestedBooks": final_suggestions,  # Always return an array
         "finalVectorClock": final_clock,
         "enqueueSuccess": enqueue_result.get('enqueue', None),

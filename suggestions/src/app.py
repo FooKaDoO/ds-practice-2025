@@ -62,6 +62,8 @@ class SuggestionsServiceServicer(sug_pb2_grpc.SuggestionsServiceServicer):
             "Book 3\n"
         )
 
+        print(prompt, "8888888888")
+
         log_tools.debug("[Suggestions Service] Generating suggestions using Cohere.")
         try:
             response = co.generate(
