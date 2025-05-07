@@ -30,6 +30,21 @@ class BooksDatabaseStub(object):
                 request_serializer=books__pb2.DecrementRequest.SerializeToString,
                 response_deserializer=books__pb2.WriteResponse.FromString,
                 )
+        self.PrepareDecrement = channel.unary_unary(
+                '/books.BooksDatabase/PrepareDecrement',
+                request_serializer=books__pb2.DecrementRequest.SerializeToString,
+                response_deserializer=books__pb2.WriteResponse.FromString,
+                )
+        self.CommitDecrement = channel.unary_unary(
+                '/books.BooksDatabase/CommitDecrement',
+                request_serializer=books__pb2.CommitRequest.SerializeToString,
+                response_deserializer=books__pb2.WriteResponse.FromString,
+                )
+        self.AbortDecrement = channel.unary_unary(
+                '/books.BooksDatabase/AbortDecrement',
+                request_serializer=books__pb2.CommitRequest.SerializeToString,
+                response_deserializer=books__pb2.WriteResponse.FromString,
+                )
 
 
 class BooksDatabaseServicer(object):
@@ -54,6 +69,24 @@ class BooksDatabaseServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PrepareDecrement(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CommitDecrement(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AbortDecrement(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_BooksDatabaseServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -70,6 +103,21 @@ def add_BooksDatabaseServicer_to_server(servicer, server):
             'DecrementStock': grpc.unary_unary_rpc_method_handler(
                     servicer.DecrementStock,
                     request_deserializer=books__pb2.DecrementRequest.FromString,
+                    response_serializer=books__pb2.WriteResponse.SerializeToString,
+            ),
+            'PrepareDecrement': grpc.unary_unary_rpc_method_handler(
+                    servicer.PrepareDecrement,
+                    request_deserializer=books__pb2.DecrementRequest.FromString,
+                    response_serializer=books__pb2.WriteResponse.SerializeToString,
+            ),
+            'CommitDecrement': grpc.unary_unary_rpc_method_handler(
+                    servicer.CommitDecrement,
+                    request_deserializer=books__pb2.CommitRequest.FromString,
+                    response_serializer=books__pb2.WriteResponse.SerializeToString,
+            ),
+            'AbortDecrement': grpc.unary_unary_rpc_method_handler(
+                    servicer.AbortDecrement,
+                    request_deserializer=books__pb2.CommitRequest.FromString,
                     response_serializer=books__pb2.WriteResponse.SerializeToString,
             ),
     }
@@ -130,6 +178,57 @@ class BooksDatabase(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/books.BooksDatabase/DecrementStock',
             books__pb2.DecrementRequest.SerializeToString,
+            books__pb2.WriteResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def PrepareDecrement(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/books.BooksDatabase/PrepareDecrement',
+            books__pb2.DecrementRequest.SerializeToString,
+            books__pb2.WriteResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def CommitDecrement(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/books.BooksDatabase/CommitDecrement',
+            books__pb2.CommitRequest.SerializeToString,
+            books__pb2.WriteResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def AbortDecrement(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/books.BooksDatabase/AbortDecrement',
+            books__pb2.CommitRequest.SerializeToString,
             books__pb2.WriteResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

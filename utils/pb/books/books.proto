@@ -6,6 +6,10 @@ service BooksDatabase {
   rpc Read  (ReadRequest)  returns (ReadResponse);
   rpc Write (WriteRequest) returns (WriteResponse);
   rpc DecrementStock(DecrementRequest) returns (WriteResponse);
+
+  rpc PrepareDecrement (DecrementRequest) returns (WriteResponse);
+  rpc CommitDecrement (CommitRequest) returns (WriteResponse);
+  rpc AbortDecrement (CommitRequest) returns (WriteResponse);
 }
 
 
@@ -27,4 +31,8 @@ message WriteRequest {
 }
 message WriteResponse {
   bool success = 1;
+}
+
+message CommitRequest { 
+  string title = 1; 
 }

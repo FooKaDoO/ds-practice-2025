@@ -5,6 +5,8 @@ import time
 import threading
 from concurrent import futures
 import re
+import json
+
 
 # --- Set Up Paths and Import Stubs ---
 FILE = __file__ if '__file__' in globals() else os.getenv("PYTHONFILE", "")
@@ -30,6 +32,21 @@ log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
 import log_tools
 
+# Import the generated gRPC stubs for Books Database
+books_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/books'))
+sys.path.insert(0, books_grpc_path)
+import books_pb2
+import books_pb2_grpc
+from books_pb2 import DecrementRequest as DbDecReq, CommitRequest as DbCommitReq
+
+
+# PaymentService stubs
+payment_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/payments'))
+sys.path.insert(0, payment_grpc_path)
+import payment_pb2, payment_pb2_grpc
+from payment_pb2 import PrepareRequest as PayPrepReq, CommitRequest as PayCommitReq, AbortRequest as PayAbortReq
+
+
 # --- Environment Variables ---
 REPLICA_ID = int(os.getenv("REPLICA_ID", "0"))
 KNOWN_EXECUTORS = os.getenv("KNOWN_EXECUTORS", "")
@@ -40,6 +57,63 @@ KNOWN_EXECUTORS = [addr for addr in KNOWN_EXECUTORS if f"_{REPLICA_ID}:" not in 
 current_leader = None
 election_in_progress = False
 leader_lock = threading.RLock()
+
+BOOKS_PRIMARY   = os.getenv("BOOKS_DB_PRIMARY", "books_db_0:50070")
+PAYMENT_SERVICE = os.getenv("PAYMENT_SERVICE", "payment:50075")
+
+
+# gRPC stub to BooksDB primary
+
+_db_channel = grpc.insecure_channel(BOOKS_PRIMARY)
+_db_stub    = books_pb2_grpc.BooksDatabaseStub(_db_channel)
+
+_pay_channel = grpc.insecure_channel(PAYMENT_SERVICE)
+_pay_stub    = payment_pb2_grpc.PaymentServiceStub(_pay_channel)
+
+def update_stock(title: str, qty: int):
+    resp = _db_stub.DecrementStock(
+        books_pb2.DecrementRequest(title=title, amount=qty)
+    )
+    if not resp.success:
+        raise RuntimeError(f"Failed to decrement stock for '{title}' (insufficient or conflict)")
+
+
+# right after your imports
+
+# ─── In‐Memory Price Catalog ────────────────────────────
+PRICE_LIST = {
+    "Harry Potter":         10,
+    "Twilight":             8,
+    "Lord of the Rings":    12,
+    "Clean Code":           30,
+}
+
+def price_lookup(title):
+    return PRICE_LIST.get(title, 0)
+
+
+
+def two_phase_commit(order_id, items, amount_cents):
+    # Phase 1: Prepare
+    p_resp = _pay_stub.Prepare(PayPrepReq(order_id=order_id, amount_cents=amount_cents))
+    if not p_resp.ready:
+        _pay_stub.Abort(PayAbortReq(order_id=order_id))
+        return False
+    # Prepare each book
+    for item in items:
+        db_resp = _db_stub.PrepareDecrement(DbDecReq(title=item['name'], amount=item['quantity']))
+        if not db_resp.success:
+            # abort payment and staged books
+            _pay_stub.Abort(PayAbortReq(order_id=order_id))
+            for prev in items:
+                _db_stub.AbortDecrement(DbCommitReq(title=prev['name']))
+            return False
+    # Phase 2: Commit
+    _pay_stub.Commit(PayCommitReq(order_id=order_id))
+    for item in items:
+        _db_stub.CommitDecrement(DbCommitReq(title=item['name']))
+    return True
+
 
 # --- Helper ---
 def parse_replica_id(addr):
@@ -129,91 +203,86 @@ def election_monitor():
 
 # --- Order Executor Service ---
 class OrderExecutorService(OrderExecutorServiceServicer):
-    def process_order(self):
-        """
-        Called automatically by polling loop. Only the leader can execute an order.
-        """
-        log_tools.info(f"[Order Executor] process_order invoked (Replica {REPLICA_ID}).")
-        global current_leader
-        with leader_lock:
-            effective_leader = current_leader if current_leader is not None else REPLICA_ID
-            if effective_leader != REPLICA_ID:
-                log_tools.debug(f"[Order Executor] Not leader => skip. Leader is {effective_leader}")
-                return
-        # We are the leader => Dequeue
-        try:
-            with grpc.insecure_channel('order_queue:50055') as channel:
-                stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
-                log_tools.info("[Order Executor] Leader polling => Dequeue call")
-                dq_response = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
-                log_tools.info(f"[Order Executor] Dequeue returned: {dq_response}")
-                if dq_response.success:
-                    log_tools.info(f"[Order Executor] Leader {REPLICA_ID} executing order {dq_response.orderId}.")
-                else:
-                    log_tools.debug("[Order Executor] No orders available.")
-        except Exception as e:
-            log_tools.error(f"[Order Executor] Exception polling queue: {e}")
-
-    def DequeueAndExecute(self, request, context):
-        """
-        RPC: Force an immediate attempt to dequeue an order. Only the leader can do so.
-        """
-        log_tools.info(f"[Order Executor] DequeueAndExecute called on replica {REPLICA_ID}.")
-        global current_leader
-        with leader_lock:
-            effective_leader = current_leader if current_leader is not None else REPLICA_ID
-            if effective_leader != REPLICA_ID:
-                return DequeueResponse(success=False, message="Not leader, standing by.")
-
-        # We are the leader => attempt Dequeue
-        try:
-            with grpc.insecure_channel('order_queue:50055') as channel:
-                stub = oq_pb2_grpc.OrderQueueServiceStub(channel)
-                dq_response = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
-                log_tools.info(f"[Order Executor] DequeueAndExecute => {dq_response}")
-                if dq_response.success:
-                    log_tools.info(f"[Order Executor] Leader {REPLICA_ID} executing order {dq_response.orderId}.")
-                    return DequeueResponse(
-                        success=True,
-                        message="Order executed",
-                        orderId=dq_response.orderId,
-                        orderData=dq_response.orderData
-                    )
-                else:
-                    return DequeueResponse(success=False, message="No orders available")
-        except Exception as e:
-            log_tools.error(f"[Order Executor] Exception => {e}")
-            return DequeueResponse(success=False, message=str(e))
-
     def Election(self, request, context):
         """
-        Called by lower ID replicas. If this replica is higher, it acknowledges => triggers own election => can become leader.
+        RPC from a lower‐ID asking “should I be leader?”
+        If we have a higher ID, we acknowledge and kick off our own election.
         """
         sender_id = request.senderId
-        log_tools.info(f"[Election] Replica {REPLICA_ID} received Election from {sender_id}.")
+        log_tools.info(f"[Election] Replica {REPLICA_ID} received Election from {sender_id}")
         if REPLICA_ID > sender_id:
-            log_tools.info(f"[Election] Replica {REPLICA_ID} acknowledges => will start own election.")
-            # Start election in background, so we don't block this RPC
+            log_tools.info(f"[Election] Replica {REPLICA_ID} acknowledges and will start its own election")
             threading.Thread(target=start_election, daemon=True).start()
             return ElectionResponse(acknowledged=True)
         else:
-            log_tools.info(f"[Election] Replica {REPLICA_ID} does not acknowledge => lower ID or same.")
             return ElectionResponse(acknowledged=False)
 
     def Coordinator(self, request, context):
         """
-        Called when a node declares itself leader => updates current_leader here.
+        RPC from the newly elected leader announcing “I’m leader now.”
+        We just record it locally.
         """
         new_leader = request.leaderId
-        log_tools.info(f"[Election] Received Coordinator => new leader is {new_leader}.")
+        log_tools.info(f"[Election] Received Coordinator → new leader is {new_leader}")
         global current_leader
         with leader_lock:
             current_leader = new_leader
         return CoordinatorResponse(success=True)
-    
+
     def GetLeader(self, request, context):
-        global current_leader
+        """
+        RPC to ask “who’s the leader?”
+        """
         return GetLeaderResponse(leaderId=current_leader if current_leader is not None else -1)
+
+    def process_order(self):
+        log_tools.info(f"[Executor] process_order (Replica {REPLICA_ID})")
+        # only leader runs
+        with leader_lock:
+            leader = current_leader if current_leader is not None else REPLICA_ID
+        if leader != REPLICA_ID:
+            return
+
+        try:
+            stub = oq_pb2_grpc.OrderQueueServiceStub(
+                grpc.insecure_channel('order_queue:50055')
+            )
+            dq = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
+            log_tools.info(f"[Executor] Dequeue → {dq}")
+            if not dq.success:
+                return
+
+            order = json.loads(dq.orderData)
+            # compute total in cents (make sure price_lookup is available)
+            total_cents = sum(
+                item['quantity'] * price_lookup(item['name']) * 100
+                for item in order['items']
+            )
+
+            # run 2PC across PaymentService + BooksDB
+            if two_phase_commit(dq.orderId, order['items'], total_cents):
+                log_tools.info(f"[Executor] Order {dq.orderId} COMMITTED")
+            else:
+                log_tools.error(f"[Executor] Order {dq.orderId} ABORTED")
+
+        except Exception as e:
+            log_tools.error(f"[Executor] process_order error: {e}")
+
+    def DequeueAndExecute(self, request, context):
+        """
+        RPC entrypoint — just alias to process_order() and return status.
+        """
+        log_tools.info(f"[Executor] DequeueAndExecute called on Replica {REPLICA_ID}")
+        # only leader will actually dequeue/commit
+        with leader_lock:
+            leader = current_leader if current_leader is not None else REPLICA_ID
+        if leader != REPLICA_ID:
+            return DequeueResponse(success=False, message="Not leader")
+
+        # invoke the same logic
+        self.process_order()
+        return DequeueResponse(success=True, message="Triggered execution")
+
 
 # Server Setup
 def serve():

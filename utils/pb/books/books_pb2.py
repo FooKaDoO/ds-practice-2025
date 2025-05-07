@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x62ooks.proto\x12\x05\x62ooks\"1\n\x10\x44\x65\x63rementRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x05\"\x1c\n\x0bReadRequest\x12\r\n\x05title\x18\x01 \x01(\t\"\x1d\n\x0cReadResponse\x12\r\n\x05stock\x18\x01 \x01(\x05\"0\n\x0cWriteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x11\n\tnew_stock\x18\x02 \x01(\x05\" \n\rWriteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xb5\x01\n\rBooksDatabase\x12/\n\x04Read\x12\x12.books.ReadRequest\x1a\x13.books.ReadResponse\x12\x32\n\x05Write\x12\x13.books.WriteRequest\x1a\x14.books.WriteResponse\x12?\n\x0e\x44\x65\x63rementStock\x12\x17.books.DecrementRequest\x1a\x14.books.WriteResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x62ooks.proto\x12\x05\x62ooks\"1\n\x10\x44\x65\x63rementRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x0e\n\x06\x61mount\x18\x02 \x01(\x05\"\x1c\n\x0bReadRequest\x12\r\n\x05title\x18\x01 \x01(\t\"\x1d\n\x0cReadResponse\x12\r\n\x05stock\x18\x01 \x01(\x05\"0\n\x0cWriteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x11\n\tnew_stock\x18\x02 \x01(\x05\" \n\rWriteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x1e\n\rCommitRequest\x12\r\n\x05title\x18\x01 \x01(\t2\xf5\x02\n\rBooksDatabase\x12/\n\x04Read\x12\x12.books.ReadRequest\x1a\x13.books.ReadResponse\x12\x32\n\x05Write\x12\x13.books.WriteRequest\x1a\x14.books.WriteResponse\x12?\n\x0e\x44\x65\x63rementStock\x12\x17.books.DecrementRequest\x1a\x14.books.WriteResponse\x12\x41\n\x10PrepareDecrement\x12\x17.books.DecrementRequest\x1a\x14.books.WriteResponse\x12=\n\x0f\x43ommitDecrement\x12\x14.books.CommitRequest\x1a\x14.books.WriteResponse\x12<\n\x0e\x41\x62ortDecrement\x12\x14.books.CommitRequest\x1a\x14.books.WriteResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -31,6 +31,8 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_WRITEREQUEST']._serialized_end=182
   _globals['_WRITERESPONSE']._serialized_start=184
   _globals['_WRITERESPONSE']._serialized_end=216
-  _globals['_BOOKSDATABASE']._serialized_start=219
-  _globals['_BOOKSDATABASE']._serialized_end=400
+  _globals['_COMMITREQUEST']._serialized_start=218
+  _globals['_COMMITREQUEST']._serialized_end=248
+  _globals['_BOOKSDATABASE']._serialized_start=251
+  _globals['_BOOKSDATABASE']._serialized_end=624
 # @@protoc_insertion_point(module_scope)

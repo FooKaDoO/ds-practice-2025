@@ -32,12 +32,6 @@ sys.path.insert(0, order_queue_grpc_path)
 import order_queue_pb2 as oq_pb2
 import order_queue_pb2_grpc as oq_pb2_grpc
 
-# Import the generated gRPC stubs for Books Database
-books_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/books'))
-sys.path.insert(0, books_grpc_path)
-import books_pb2
-import books_pb2_grpc
-
 # Import the logging utility
 log_tools_path = os.path.abspath(os.path.join(FILE, '../../../utils/log_tools'))
 sys.path.insert(0, log_tools_path)
@@ -46,19 +40,18 @@ import log_tools
 app = Flask(__name__)
 CORS(app, resources={r'/*': {'origins': '*'}})
 
+# Import the generated gRPC stubs for Books Database
+books_grpc_path = os.path.abspath(os.path.join(FILE, '../../../utils/pb/books'))
+sys.path.insert(0, books_grpc_path)
+import books_pb2
+import books_pb2_grpc
 
-# ------------------------------------------------------------------
-# Setup a single stub to primary Books Database for stock updates
-# ------------------------------------------------------------------
-_db_channel = grpc.insecure_channel(os.getenv('BOOKS_DB_PRIMARY', 'books_db_0:50070'))
-_db_stub    = books_pb2_grpc.BooksDatabaseStub(_db_channel)
+# and create the channel & stub using the same env var you already set
+_db_channel = grpc.insecure_channel(
+    os.getenv('BOOKS_DB_PRIMARY', 'books_0:50070')
+)
+_db_stub = books_pb2_grpc.BooksDatabaseStub(_db_channel)
 
-
-def update_stock(title: str, qty: int):
-    # Read ncurrent stock
-    resp = _db_stub.DecrementStock(books_pb2.DecrementRequest(title=title, amount=qty))
-    if not resp.success:
-        raise ValueError("Insufficient or concurrent conflict")
 # --------------------------
 # RPC Helper Functions
 # --------------------------
@@ -386,21 +379,6 @@ def checkout():
     enqueue_thread.start()
     enqueue_thread.join()
     log_tools.debug(f"[Orchestrator] Enqueue result: {enqueue_result}")
-
-    
-    # 6. Update stocks for each item in Books DB
-    try:
-        for item in request_data.get('items', []):
-            update_stock(item['name'], item['quantity'])
-        log_tools.info("[Orchestrator] Stock updated successfully for all items.")
-    except Exception as e:
-        log_tools.error(f"[Orchestrator] Stock update failed: {e}")
-        return jsonify({
-            'orderId': order_id,
-            'status': 'Order Rejected. Stock update failed.',
-            'suggestedBooks': [],
-            'error': {'message': str(e)}
-        }), 500
     
     # ----- Step 7: Build the Final JSON Response -----
     response_json = {
