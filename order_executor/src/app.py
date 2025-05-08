@@ -67,8 +67,13 @@ PAYMENT_SERVICE = os.getenv("PAYMENT_SERVICE", "payments:50075")
 _db_channel = grpc.insecure_channel(BOOKS_PRIMARY)
 _db_stub    = books_pb2_grpc.BooksDatabaseStub(_db_channel)
 
-_pay_channel = grpc.insecure_channel(PAYMENT_SERVICE)
-_pay_stub    = payment_pb2_grpc.PaymentServiceStub(_pay_channel)
+def get_pay_stub():
+    channel = grpc.insecure_channel(PAYMENT_SERVICE)
+    try:
+        grpc.channel_ready_future(channel).result(timeout=3)
+    except grpc.FutureTimeoutError:
+        raise grpc.RpcError("Channel to payment service not ready")
+    return payment_pb2_grpc.PaymentServiceStub(channel)
 
 def update_stock(title: str, qty: int):
     resp = _db_stub.DecrementStock(
@@ -95,6 +100,9 @@ def price_lookup(title):
 
 def two_phase_commit(order_id, items, amount_cents):
     # Phase 1: Prepare
+    # If breaks here, loop the same request until it works, since this is local.
+    print("[Executor] Preparing...")
+    _pay_stub = get_pay_stub()
     p_resp = _pay_stub.Prepare(PayPrepReq(order_id=order_id, amount_cents=amount_cents))
     if not p_resp.ready:
         _pay_stub.Abort(PayAbortReq(order_id=order_id))
@@ -109,11 +117,28 @@ def two_phase_commit(order_id, items, amount_cents):
                 _db_stub.AbortDecrement(DbCommitReq(title=prev['name']))
             return False
     # Phase 2: Commit
-    _pay_stub.Commit(PayCommitReq(order_id=order_id))
+    # If breaks in commit.
+    if not retry_commit_payment(order_id):
+        log_tools.error(f"[2PC] Payment commit ultimately failed, potential inconsistency.")
+        return False
     for item in items:
         _db_stub.CommitDecrement(DbCommitReq(title=item['name']))
     return True
 
+def retry_commit_payment(order_id, retries=100, delay=2):
+    print("[Executor] Commiting...")
+    for attempt in range(retries):
+        try:
+            _pay_stub = get_pay_stub()
+            resp = _pay_stub.Commit(PayCommitReq(order_id=order_id))
+            if resp.success:
+                print(f"[Executor] Payment commit {order_id} successful")
+                return True
+        except grpc.RpcError as e:
+            log_tools.warn(f"[2PC] Payment commit failed (attempt {attempt+1}): {e}")
+        time.sleep(delay)
+        print("[Executor] Retrying...")
+    return False
 
 # --- Helper ---
 def parse_replica_id(addr):
