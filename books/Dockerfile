@@ -9,4 +9,4 @@ COPY ./books/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Start the transaction verification service
-CMD python utils/other/hotreload.py "books/src/app.py"
+CMD ["python", "books/src/app.py"]

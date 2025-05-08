@@ -156,6 +156,12 @@ class BackupReplica(BooksDatabaseServicer):
 def load_initial_stock():
     fn = os.getenv("INITIAL_STOCK_FILE", "initial_stock.json")
     path = os.path.join(os.path.dirname(__file__), fn)
+    with _store_lock:
+        # only seed once
+        if _store:
+            log_tools.info("[BooksDB] Store already initialized, skipping seeding.")
+            return
+
     try:
         with open(path) as f:
             data = json.load(f)
