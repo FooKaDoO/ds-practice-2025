@@ -267,31 +267,44 @@ class OrderExecutorService(OrderExecutorServiceServicer):
             leader = current_leader if current_leader is not None else REPLICA_ID
         if leader != REPLICA_ID:
             return
+        
 
-        try:
-            stub = oq_pb2_grpc.OrderQueueServiceStub(
-                grpc.insecure_channel('order_queue:50055')
-            )
-            dq = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
-            log_tools.info(f"[Executor] Dequeue → {dq}")
-            if not dq.success:
-                return
+        stub = oq_pb2_grpc.OrderQueueServiceStub(
+            grpc.insecure_channel('order_queue:50055')
+        )
+        dq = stub.Dequeue(oq_pb2.DequeueRequest(), timeout=5)
+        log_tools.info(f"[Executor] Dequeue → {dq}")
+        if not dq.success:
+            return
 
-            order = json.loads(dq.orderData)
-            # compute total in cents (make sure price_lookup is available)
-            total_cents = sum(
-                item['quantity'] * price_lookup(item['name']) * 100
-                for item in order['items']
-            )
+        order = json.loads(dq.orderData)
 
-            # run 2PC across PaymentService + BooksDB
+        USE_2PC = True
+
+        if USE_2PC:
+            # ─── Your existing two_phase_commit logic ─────────────────────────
+            total_cents = sum(item['quantity'] * price_lookup(item['name']) * 100
+                            for item in order['items'])
             if two_phase_commit(dq.orderId, order['items'], total_cents):
-                log_tools.info(f"[Executor] Order {dq.orderId} COMMITTED")
+                log_tools.info(f"[Executor] Order {dq.orderId} COMMITTED via 2PC")
             else:
-                log_tools.error(f"[Executor] Order {dq.orderId} ABORTED")
-
-        except Exception as e:
-            log_tools.error(f"[Executor] process_order error: {e}")
+                log_tools.error(f"[Executor] Order {dq.orderId} ABORTED via 2PC")        
+        else:
+        # ─── Simple “decrement‐stock” fallback ─────────────────────────────
+            committed = True
+            for item in order['items']:
+                try:
+                    update_stock(item['name'], item['quantity'])
+                    log_tools.info(f"[Executor] Decremented {item['quantity']} of '{item['name']}'")
+                except Exception as e:
+                    log_tools.error(f"[Executor] Fallback update_stock failed for '{item['name']}': {e}")
+                    committed = False
+                    break
+                
+            if committed:
+                log_tools.info(f"[Executor] Order {dq.orderId} successfully executed (stock updated).")
+            else:
+                log_tools.error(f"[Executor] Order {dq.orderId} execution aborted (no stock change).")
 
     def DequeueAndExecute(self, request, context):
         """
