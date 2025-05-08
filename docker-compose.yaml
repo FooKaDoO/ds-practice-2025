@@ -201,7 +201,7 @@ services:
       - KNOWN_EXECUTORS=order_executor_0:50056,order_executor_1:50056
       - PYTHONFILE=/app/order_executor/src/app.py
       - BOOKS_DB_PRIMARY=books_0:50070
-      - PAYMENT_SERVICE=payment:50075
+      - PAYMENT_SERVICE=payments:50075
     volumes:
       - ./utils:/app/utils
       - ./order_executor/src:/app/order_executor/src

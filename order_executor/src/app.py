@@ -59,7 +59,7 @@ election_in_progress = False
 leader_lock = threading.RLock()
 
 BOOKS_PRIMARY   = os.getenv("BOOKS_DB_PRIMARY", "books_db_0:50070")
-PAYMENT_SERVICE = os.getenv("PAYMENT_SERVICE", "payment:50075")
+PAYMENT_SERVICE = os.getenv("PAYMENT_SERVICE", "payments:50075")
 
 
 # gRPC stub to BooksDB primary
