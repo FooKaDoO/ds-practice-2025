@@ -21,8 +21,6 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
 
     def load_state(self):
         with self.lock:
-            if not os.path.exists(os.path.dirname(STATE_FILE)):
-                os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             with open(STATE_FILE, 'r') as f:
                 try:
                     return set(json.load(f))
@@ -32,8 +30,6 @@ class PaymentService(payment_pb2_grpc.PaymentServiceServicer):
 
     def save_state(self):
         with self.lock:
-            if not os.path.exists(os.path.dirname(STATE_FILE)):
-                os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             with open(STATE_FILE, 'w') as f:
                 json.dump(list(self.prepared), f)
 
