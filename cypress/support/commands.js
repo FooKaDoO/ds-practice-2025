@@ -20,9 +20,11 @@ Cypress.Commands.add('all', (...chainables) => {
 
   // 👇 **return** the promise so callers receive the array
   return cy.wrap(
-    Cypress.Promise.all(chainables.map(ch => ch.then ? ch : cy.wrap(ch))),
-    { timeout }
-  );
+    Cypress.Promise.all(chainables.map(ch =>
+      ch && typeof ch.then === 'function'
+        ? new Cypress.Promise(resolve => ch.then(resolve))   // ← force real promise
+        : Cypress.Promise.resolve(ch)
+    )))
 });
 
 

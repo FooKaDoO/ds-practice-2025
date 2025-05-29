@@ -1,4 +1,4 @@
-import orders from '../fixtures/orders.json';
+import orders from '../../cypress/fixtures/orders.json';
 
 const good = orders.happy.payload;
 const bad  = orders.fraud.payload;
