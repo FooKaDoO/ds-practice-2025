@@ -31,15 +31,15 @@ Cypress.Commands.add('all', (...chainables) => {
  * Usage:  cy.addItem('Harry Potter', 2)
  */
 // cypress/support/commands.js
-Cypress.Commands.add('addItem', (title, qty = 1) => {
-  // purely DOM interaction, no waits
-  cy.contains(title)
-    .parent()                         // adjust to book row/card
-    .find('input[type=number]')       // quantity box
-    .clear()
-    .type(String(qty));
-});
 
+Cypress.Commands.add('addItem', (title, qty = 1) => {
+  // Find the <li> that contains the title text
+  cy.contains('li', title, { timeout: 10_000 })   // ⬅ waits until list is rendered
+    .find('input[type=number]')                   // the quantity input in that <li>
+    .clear()
+    .type(String(qty))
+    .blur();                                      // trigger any onBlur handler
+});
 
 
 /**
@@ -47,31 +47,34 @@ Cypress.Commands.add('addItem', (title, qty = 1) => {
  * you used for the API flow.
  * Usage:  cy.checkout(orders.happy)
  */
+// cypress/support/commands.js
 Cypress.Commands.add('checkout', order => {
-  const p = order.payload;          // just shorter names
-  cy.contains('Cart').click();
-  cy.contains('Checkout').click();
+  const p = order.payload;                 // shorthand
 
-  // user details
-  cy.get('[name=name]').type(p.user.name);
-  cy.get('[name=contact]').type(p.user.contact);
+  // ──────────────────────────────────────────
+  // USER + PAYMENT
+  cy.get('[name=name]').clear().type(p.user.name);
+  cy.get('[name=contact]').clear().type(p.user.contact);
 
-  // credit-card
-  cy.get('[name=cc-number]').type(p.creditCard.number);
-  cy.get('[name=cc-exp]').type(p.creditCard.expirationDate);
-  cy.get('[name=cc-cvv]').type(p.creditCard.cvv);
+  cy.get('[name=creditCard]').clear().type(p.creditCard.number);
+  cy.get('[name=expirationDate]').clear().type(p.creditCard.expirationDate);
+  cy.get('[name=cvv]').clear().type(p.creditCard.cvv);
 
-  // address
-  cy.get('[name=street]').type(p.billingAddress.street);
-  cy.get('[name=city]').type(p.billingAddress.city);
-  cy.get('[name=state]').type(p.billingAddress.state);
-  cy.get('[name=zip]').type(p.billingAddress.zip);
-  cy.get('[name=country]').select(p.billingAddress.country);
+  // ──────────────────────────────────────────
+  // ADDRESS
+  cy.get('[name=billingStreet]').type(p.billingAddress.street);
+  cy.get('[name=billingCity]').type(p.billingAddress.city);
+  cy.get('[name=billingState]').type(p.billingAddress.state);
+  cy.get('[name=billingZip]').type(p.billingAddress.zip);
+  cy.get('[name=billingCountry]').type(p.billingAddress.country);
 
-  // extras
-  cy.get('[name=shipping]').select(p.shippingMethod);
-  if (p.giftWrapping) cy.get('[name=giftWrapping]').check();
+  // ──────────────────────────────────────────
+  // SHIPPING + EXTRAS
+  cy.get('[name=shippingMethod]').select(p.shippingMethod);
+  cy.get('[name=giftWrapping]')[p.giftWrapping ? 'check' : 'uncheck']();
   cy.get('[name=terms]').check();
 
-  cy.contains('Place order').click();
+  // ──────────────────────────────────────────
+  // SUBMIT
+  cy.contains('button', /submit order/i).click();
 });
