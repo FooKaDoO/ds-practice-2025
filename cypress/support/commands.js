@@ -7,6 +7,12 @@ Cypress.Commands.add('placeOrder', payload => {
   });
 });
 
+Cypress.Commands.add('restartBooksService', () => {
+  cy.exec('docker-compose restart books_0');
+  cy.exec('docker-compose restart books_1');
+  cy.exec('docker-compose restart books_2');
+});
+
 Cypress.Commands.add('stockOf', title =>
   cy.request(`${Cypress.env('API')}/api/books`)
     .its('body')
