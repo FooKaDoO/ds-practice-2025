@@ -20,7 +20,7 @@ describe('Mixture of fraudulent and normal orders', () => {
   
         cy.waitUntil(() =>
           cy.stockOf('Harry Potter').then(s => (s + 0) === target),
-          { timeout: 20_000, interval: 1_000 }            // 15 s max
+          { timeout: 20_000, interval: 1_000 }
         );
   
       });

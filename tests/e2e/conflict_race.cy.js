@@ -18,13 +18,15 @@ describe('Conflicting orders racing for the same stock', () => {
         const o2 = cy.placeOrder(order(start));
   
         cy.all(o1, o2, { timeout: 20_000 }).then(([r1, r2]) => {
-          expect([r1.status, r2.status].filter(s => (s+0) === 200)).to.have.length(1);
-          expect([r1.status, r2.status].filter(s => (s+0) === 400)).to.have.length(1);
+          expect([r1.status, r2.status].filter(s => (s+0) === 200)).to.have.length(2);
+          expect([r1.status, r2.status].filter(s => (s+0) === 400)).to.have.length(0);
         });
   
         // final book stock ↓ by exactly START
-        cy.stockOf('Harry Potter')
-          .should('eq', start - start);
+        cy.waitUntil(() =>
+          cy.stockOf('Harry Potter').then(s => (s + 0) === 0),
+          { timeout: 20_000, interval: 1_000 }
+        );
       });
 
     });

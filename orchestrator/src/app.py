@@ -377,7 +377,7 @@ def checkout():
     log_tools.debug(f"[Orchestrator] Final vector clock from Suggestions: {final_clock}")
     
     # ----- Step 5: Enqueue the Order -----
-    final_status = "Order Approved"
+    final_status = "Order Placed Successfully."
     enqueue_result = {}
     enqueue_thread = threading.Thread(target=call_enqueue_order, args=(order_id, request_data, enqueue_result))
     log_tools.debug("[Orchestrator] Starting enqueue thread.")
