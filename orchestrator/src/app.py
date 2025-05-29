@@ -56,6 +56,11 @@ _db_stub = books_pb2_grpc.BooksDatabaseStub(_db_channel)
 # RPC Helper Functions
 # --------------------------
 
+# orchestrator/src/app.py
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
 @log_tools.log_decorator("Orchestrator")
 def call_verify_items(order_id, current_clock, order_data, result_dict):
     """

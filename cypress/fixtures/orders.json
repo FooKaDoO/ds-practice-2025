@@ -1,0 +1,32 @@
+{
+  "happy": {
+    "payload": {
+      "user": { "name": "John Doe", "contact": "john.doe@example.com" },
+      "creditCard": { "number": "4111111111111111", "expirationDate": "12/25", "cvv": "123" },
+      "items": [ { "name": "Harry Potter", "quantity": 2 } ],
+      "billingAddress": {
+        "street": "Raatuse 22, Tartu",
+        "city": "Tartu",
+        "state": "Tartu",
+        "zip": "51009",
+        "country": "Estonia"
+      },
+      "shippingMethod": "Standard",
+      "giftWrapping": true,
+      "termsAccepted": true
+    },
+    "expectedStockAfter": 8
+  },
+
+  "fraud": {
+    "payload": {
+      "user": { "name": "Eve Hacker", "contact": "evil@bad.com" },
+      "creditCard": { "number": "1234", "expirationDate": "01/01", "cvv": "000" },
+      "items": [ { "name": "Harry Potter", "quantity": 1 } ],
+      "billingAddress": { "street": "X", "city": "X","state":"X","zip":"X","country":"X" },
+      "shippingMethod": "Express",
+      "giftWrapping": false,
+      "termsAccepted": true
+    }
+  }
+}

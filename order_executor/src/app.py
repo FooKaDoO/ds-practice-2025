@@ -282,7 +282,7 @@ class OrderExecutorService(OrderExecutorServiceServicer):
         USE_2PC = True
 
         if USE_2PC:
-            # ─── Your existing two_phase_commit logic ─────────────────────────
+            # ─── two_phase_commit logic ─────────────────────────
             total_cents = sum(item['quantity'] * price_lookup(item['name']) * 100
                             for item in order['items'])
             if two_phase_commit(dq.orderId, order['items'], total_cents):

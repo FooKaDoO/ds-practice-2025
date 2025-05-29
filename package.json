@@ -1,0 +1,29 @@
+{
+  "name": "ds-practice-2025",
+  "version": "1.0.0",
+  "description": "This repository is a **distributed systems** practice project, demonstrating a **client-server** architecture with **multiple microservices**. The system simulates an **online bookstore** checkout flow, including **fraud detection**, **transaction verification**, and **book suggestions**. It uses **Flask** for the orchestrator (REST), **gRPC** for inter-service communication, **Docker** for containerization, and **Docker Compose** for orchestration.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FooKaDoO/ds-practice-2025.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/FooKaDoO/ds-practice-2025/issues"
+  },
+  "homepage": "https://github.com/FooKaDoO/ds-practice-2025#readme",
+  "devDependencies": {
+    "@bahmutov/cy-api": "^2.2.8",
+    "cypress": "^14.4.0",
+    "cypress-wait-until": "^3.0.2"
+  }
+}
