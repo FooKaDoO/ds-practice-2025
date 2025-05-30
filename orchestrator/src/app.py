@@ -83,6 +83,14 @@ meterProvider = MeterProvider(resource=resource, metric_readers=[reader])
 metrics.set_meter_provider(meterProvider)
 
 tracer = trace.get_tracer("orchestrator")
+meter = metrics.get_meter("orchestrator")
+
+# Create a histogram to track service call frequency
+service_call_histogram = meter.create_histogram(
+    name="orchestrator.service_calls",
+    description="Counts how many times each service is called",
+    unit="1"
+)
 
 # --------------------------
 # RPC Helper Functions
@@ -281,6 +289,7 @@ def list_books():
             catalog.append({"title": title, "stock": 0})
     return jsonify(catalog)
 
+
 @app.route('/checkout', methods=['POST'])
 def checkout():
     with tracer.start_as_current_span("Parse Request & Generate Order ID") as span:
@@ -295,7 +304,14 @@ def checkout():
     with tracer.start_as_current_span("Initialization Phase") as span:
         span.set_attribute("order.id", order_id)
         span.set_attribute("component", "init.services")
+
         init_result = {}
+
+        # Record each initialization call
+        service_call_histogram.record(1, attributes={"service": "initialize_fraud"})
+        service_call_histogram.record(1, attributes={"service": "initialize_tx"})
+        service_call_histogram.record(1, attributes={"service": "initialize_suggestions"})
+
         threads_init = [
             threading.Thread(target=call_initialize_fraud, args=(order_id, request_data, init_result)),
             threading.Thread(target=call_initialize_tx, args=(order_id, request_data, init_result)),
@@ -314,6 +330,11 @@ def checkout():
     with tracer.start_as_current_span("Verify Items & User Data") as span:
         span.set_attribute("order.id", order_id)
         span.set_attribute("component", "tx.verify")
+
+        # Record each verification call
+        service_call_histogram.record(1, attributes={"service": "verify_items"})
+        service_call_histogram.record(1, attributes={"service": "verify_user_data"})
+
         thread_a = threading.Thread(target=call_verify_items, args=(order_id, initial_clock, request_data, tx_result))
         thread_b = threading.Thread(target=call_verify_user_data, args=(order_id, initial_clock, request_data, tx_result))
         log_tools.debug("[Orchestrator] Starting Transaction events (a) and (b) in parallel.")
@@ -352,6 +373,10 @@ def checkout():
 
     with tracer.start_as_current_span("Verify Card Info") as span:
         tx_result2 = {}
+
+        # Record verification call
+        service_call_histogram.record(1, attributes={"service": "verify_card_info"})
+
         call_verify_card_info(order_id, merged_tx_clock, request_data, tx_result2)
         span.set_attribute("order.id", order_id)
         span.set_attribute("verify_card.success", tx_result2.get('verify_card_success', False))
@@ -370,6 +395,9 @@ def checkout():
 
     with tracer.start_as_current_span("Fraud Check - User") as span:
         fraud_result = {}
+
+        service_call_histogram.record(1, attributes={"service": "check_user_fraud"})
+
         call_check_user_fraud(order_id, updated_tx_clock, request_data, fraud_result)
         span.set_attribute("check_user_fraud.success", fraud_result.get('check_user_fraud_success', False))
         if not fraud_result.get('check_user_fraud_success', True):
@@ -385,6 +413,9 @@ def checkout():
 
     with tracer.start_as_current_span("Fraud Check - Card") as span:
         fraud_result2 = {}
+
+        service_call_histogram.record(1, attributes={"service": "check_card_fraud"})
+
         call_check_card_fraud(order_id, clock_after_user_fraud, request_data, fraud_result2)
         span.set_attribute("check_card_fraud.success", fraud_result2.get('check_card_fraud_success', False))
         if not fraud_result2.get('check_card_fraud_success', True):
@@ -402,6 +433,9 @@ def checkout():
 
     with tracer.start_as_current_span("Generate Suggestions") as span:
         sug_result = {}
+
+        service_call_histogram.record(1, attributes={"service": "generate_suggestions"})
+
         call_generate_suggestions(order_id, updated_fraud_clock, request_data, sug_result)
         span.set_attribute("generate_suggestions.success", sug_result.get('generate_suggestions_success', False))
         if not sug_result.get('generate_suggestions_success', True):
@@ -421,6 +455,9 @@ def checkout():
 
     with tracer.start_as_current_span("Enqueue Order") as span:
         enqueue_result = {}
+
+        service_call_histogram.record(1, attributes={"service": "enqueue_order"})
+
         enqueue_thread = threading.Thread(target=call_enqueue_order, args=(order_id, request_data, enqueue_result))
         span.set_attribute("order.id", order_id)
         log_tools.debug("[Orchestrator] Starting enqueue thread.")
