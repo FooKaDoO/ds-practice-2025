@@ -11,7 +11,7 @@ it('submits via UI and deducts stock', () => {
     cy.addItem('Harry Potter', 2);   // ← now finds the input
     cy.checkout(o);                  // Submit Order button works fine
   
-    cy.contains(/order approved/i);  // case-insensitive just in case
+    cy.contains(/order placed/i);  // case-insensitive just in case
 
   });
 

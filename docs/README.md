@@ -100,6 +100,39 @@ This repository is a **distributed systems** practice project, demonstrating a *
 6. **Orchestrator** returns final JSON to **Frontend** → user sees “Order Approved/Rejected” plus any suggestions.
 
 ---
+---
+
+## ✅ End-to-End & Load Testing
+
+### Test-suite layout
+
+| Folder / file                       | Purpose                                    |
+| ----------------------------------- | ------------------------------------------ |
+| `tests/e2e/*.cy.js`                 | **Cypress** specs – browser-level E2E.     |
+| `tests/fixtures/orders.json`        | Ready-made payloads (happy, fraud, race…). |
+| `tests/load/locustfile.py`          | **Locust** load-test (adjust users/RPS).   |
+
+#### Scenarios covered
+
+1. **Single non-fraudulent order** – base happy path  
+2. **Multiple non-conflicting orders** – parallel, different books  
+3. **Mixed orders** – one valid, one fraudulent (expect 200 + 400)  
+4. **Conflicting orders** – two clients race for the same stock; only one wins  
+
+### Running the tests
+
+```bash
+# headless Cypress (all specs)
+npm install          # one-off
+npx cypress run
+
+# run a single spec
+npx cypress run --spec "tests/e2e/mixed_fraud.cy.js"
+
+# Locust load test (100 users, 10 spawn/sec)
+locust -f tests/load/locustfile.py --headless \
+       -u 100 -r 10 --host http://localhost:8081
+
 
 ## Setup and Run
 
