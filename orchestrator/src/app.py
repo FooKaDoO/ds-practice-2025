@@ -82,6 +82,8 @@ reader = PeriodicExportingMetricReader(
 meterProvider = MeterProvider(resource=resource, metric_readers=[reader])
 metrics.set_meter_provider(meterProvider)
 
+tracer = trace.get_tracer("orchestrator")
+
 # --------------------------
 # RPC Helper Functions
 # --------------------------
@@ -281,150 +283,164 @@ def list_books():
 
 @app.route('/checkout', methods=['POST'])
 def checkout():
-    """
-    Processes a checkout request:
-      - Generates a unique OrderID.
-      - Dispatches initialization calls to all backend services.
-      - Executes events in partial order using vector clocks.
-      - Aggregates responses and returns final status.
-      - Always returns "suggestedBooks" and "message" fields.
-    """
-    # Parse the JSON order data from the request
-    request_data = json.loads(request.data)
-    log_tools.debug(f"[Orchestrator] Request Data: {json.dumps(request_data.get('items'), indent=2)}")
-    
-    # Generate a unique OrderID
-    order_id = str(uuid.uuid4())
-    log_tools.info(f"[Orchestrator] Generated OrderID: {order_id}")
-    
-    # ----- Step 1: Initialization -----
-    init_result = {}
-    threads_init = [
-        threading.Thread(target=call_initialize_fraud, args=(order_id, request_data, init_result)),
-        threading.Thread(target=call_initialize_tx, args=(order_id, request_data, init_result)),
-        threading.Thread(target=call_initialize_suggestions, args=(order_id, request_data, init_result))
-    ]
-    log_tools.debug("[Orchestrator] Starting initialization threads.")
-    for t in threads_init:
-        t.start()
-    for t in threads_init:
-        t.join()
-    log_tools.debug(f"[Orchestrator] Initialization results: {init_result}")
-    
-    # ----- Step 2: Execute Transaction Verification Events -----
+    with tracer.start_as_current_span("Parse Request & Generate Order ID") as span:
+        request_data = json.loads(request.data)
+        order_id = str(uuid.uuid4())
+        span.set_attribute("order.id", order_id)
+        span.set_attribute("component", "request.parser")
+        span.set_attribute("item.count", len(request_data.get('items', [])))
+        log_tools.debug(f"[Orchestrator] Request Data: {json.dumps(request_data.get('items'), indent=2)}")
+        log_tools.info(f"[Orchestrator] Generated OrderID: {order_id}")
+
+    with tracer.start_as_current_span("Initialization Phase") as span:
+        span.set_attribute("order.id", order_id)
+        span.set_attribute("component", "init.services")
+        init_result = {}
+        threads_init = [
+            threading.Thread(target=call_initialize_fraud, args=(order_id, request_data, init_result)),
+            threading.Thread(target=call_initialize_tx, args=(order_id, request_data, init_result)),
+            threading.Thread(target=call_initialize_suggestions, args=(order_id, request_data, init_result))
+        ]
+        log_tools.debug("[Orchestrator] Starting initialization threads.")
+        for t in threads_init:
+            t.start()
+        for t in threads_init:
+            t.join()
+        log_tools.debug(f"[Orchestrator] Initialization results: {init_result}")
+
     initial_clock = [0, 0, 0]
     tx_result = {}
-    # (a) Verify Items and (b) Verify User Data in parallel:
-    thread_a = threading.Thread(target=call_verify_items, args=(order_id, initial_clock, request_data, tx_result))
-    thread_b = threading.Thread(target=call_verify_user_data, args=(order_id, initial_clock, request_data, tx_result))
-    log_tools.debug("[Orchestrator] Starting Transaction events (a) and (b) in parallel.")
-    thread_a.start()
-    thread_b.start()
-    thread_a.join()
-    thread_b.join()
-    
-    # Error checking for Items and User Data
-    if not tx_result.get('verify_items_success', True):
-        final_status = "Order Rejected. " + tx_result.get('verify_items_reason', "Items verification failed.")
-        return jsonify({
-            "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}   # Error object for frontend
-        }), 400
-    if not tx_result.get('verify_user_success', True):
-        final_status = "Order Rejected. " + tx_result.get('verify_user_reason', "User data verification failed.")
-        return jsonify({
-            "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}
-        }), 400
 
-    # Merge vector clocks from (a) and (b)
-    merged_tx_clock = [max(tx_result['verify_items'][i], tx_result['verify_user'][i]) for i in range(3)]
-    log_tools.debug(f"[Orchestrator] Merged clock after events (a) and (b): {merged_tx_clock}")
-    
-    # (c) Verify Card Info
-    tx_result2 = {}
-    call_verify_card_info(order_id, merged_tx_clock, request_data, tx_result2)
-    if not tx_result2.get('verify_card_success', True):
-        final_status = "Order Rejected. " + tx_result2.get('verify_card_reason', "Credit card verification failed.")
-        return jsonify({
+    with tracer.start_as_current_span("Verify Items & User Data") as span:
+        span.set_attribute("order.id", order_id)
+        span.set_attribute("component", "tx.verify")
+        thread_a = threading.Thread(target=call_verify_items, args=(order_id, initial_clock, request_data, tx_result))
+        thread_b = threading.Thread(target=call_verify_user_data, args=(order_id, initial_clock, request_data, tx_result))
+        log_tools.debug("[Orchestrator] Starting Transaction events (a) and (b) in parallel.")
+        thread_a.start()
+        thread_b.start()
+        thread_a.join()
+        thread_b.join()
+
+        span.set_attribute("verify_items.success", tx_result.get('verify_items_success', False))
+        span.set_attribute("verify_user.success", tx_result.get('verify_user_success', False))
+
+        if not tx_result.get('verify_items_success', True):
+            reason = tx_result.get('verify_items_reason', "Items verification failed.")
+            span.set_attribute("verify_items.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+
+        if not tx_result.get('verify_user_success', True):
+            reason = tx_result.get('verify_user_reason', "User data verification failed.")
+            span.set_attribute("verify_user.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+
+    with tracer.start_as_current_span("Merge Vector Clocks") as span:
+        merged_tx_clock = [max(tx_result['verify_items'][i], tx_result['verify_user'][i]) for i in range(3)]
+        span.set_attribute("merged.clock", str(merged_tx_clock))
+        log_tools.debug(f"[Orchestrator] Merged clock after events (a) and (b): {merged_tx_clock}")
+
+    with tracer.start_as_current_span("Verify Card Info") as span:
+        tx_result2 = {}
+        call_verify_card_info(order_id, merged_tx_clock, request_data, tx_result2)
+        span.set_attribute("order.id", order_id)
+        span.set_attribute("verify_card.success", tx_result2.get('verify_card_success', False))
+        if not tx_result2.get('verify_card_success', True):
+            reason = tx_result2.get('verify_card_reason', "Credit card verification failed.")
+            span.set_attribute("verify_card.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+        updated_tx_clock = tx_result2['verify_card']
+        span.set_attribute("updated.clock", str(updated_tx_clock))
+        log_tools.debug(f"[Orchestrator] Updated clock after event (c): {updated_tx_clock}")
+
+    with tracer.start_as_current_span("Fraud Check - User") as span:
+        fraud_result = {}
+        call_check_user_fraud(order_id, updated_tx_clock, request_data, fraud_result)
+        span.set_attribute("check_user_fraud.success", fraud_result.get('check_user_fraud_success', False))
+        if not fraud_result.get('check_user_fraud_success', True):
+            reason = fraud_result.get('check_user_fraud_reason', "User fraud check failed.")
+            span.set_attribute("check_user_fraud.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+        clock_after_user_fraud = fraud_result['check_user_fraud']
+
+    with tracer.start_as_current_span("Fraud Check - Card") as span:
+        fraud_result2 = {}
+        call_check_card_fraud(order_id, clock_after_user_fraud, request_data, fraud_result2)
+        span.set_attribute("check_card_fraud.success", fraud_result2.get('check_card_fraud_success', False))
+        if not fraud_result2.get('check_card_fraud_success', True):
+            reason = fraud_result2.get('check_card_fraud_reason', "Credit card fraud check failed.")
+            span.set_attribute("check_card_fraud.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+        updated_fraud_clock = fraud_result2['check_card_fraud']
+        span.set_attribute("updated.clock", str(updated_fraud_clock))
+        log_tools.debug(f"[Orchestrator] Updated clock after Fraud events: {updated_fraud_clock}")
+
+    with tracer.start_as_current_span("Generate Suggestions") as span:
+        sug_result = {}
+        call_generate_suggestions(order_id, updated_fraud_clock, request_data, sug_result)
+        span.set_attribute("generate_suggestions.success", sug_result.get('generate_suggestions_success', False))
+        if not sug_result.get('generate_suggestions_success', True):
+            reason = sug_result.get('generate_suggestions_reason', "Suggestions generation failed.")
+            span.set_attribute("generate_suggestions.reason", reason)
+            return jsonify({
+                "orderId": order_id,
+                "status": "Order Rejected. " + reason,
+                "suggestedBooks": [],
+                "error": {"message": reason}
+            }), 400
+        final_suggestions = sug_result['generate_suggestions']['books']
+        final_clock = sug_result['generate_suggestions']['clock']
+        span.set_attribute("suggested_books.count", len(final_suggestions))
+        span.set_attribute("final.clock", str(final_clock))
+        log_tools.debug(f"[Orchestrator] Final vector clock from Suggestions: {final_clock}")
+
+    with tracer.start_as_current_span("Enqueue Order") as span:
+        enqueue_result = {}
+        enqueue_thread = threading.Thread(target=call_enqueue_order, args=(order_id, request_data, enqueue_result))
+        span.set_attribute("order.id", order_id)
+        log_tools.debug("[Orchestrator] Starting enqueue thread.")
+        enqueue_thread.start()
+        enqueue_thread.join()
+        span.set_attribute("enqueue.success", enqueue_result.get('enqueue', False))
+        log_tools.debug(f"[Orchestrator] Enqueue result: {enqueue_result}")
+
+    with tracer.start_as_current_span("Build Response") as span:
+        span.set_attribute("order.id", order_id)
+        response_json = {
             "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}
-        }), 400
-    updated_tx_clock = tx_result2['verify_card']
-    log_tools.debug(f"[Orchestrator] Updated clock after event (c): {updated_tx_clock}")
-    
-    # ----- Step 3: Execute Fraud Detection Events -----
-    fraud_result = {}
-    call_check_user_fraud(order_id, updated_tx_clock, request_data, fraud_result)
-    if not fraud_result.get('check_user_fraud_success', True):
-        final_status = "Order Rejected. " + fraud_result.get('check_user_fraud_reason', "User fraud check failed.")
-        return jsonify({
-            "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}
-        }), 400
-    clock_after_user_fraud = fraud_result['check_user_fraud']
-    
-    fraud_result2 = {}
-    call_check_card_fraud(order_id, clock_after_user_fraud, request_data, fraud_result2)
-    if not fraud_result2.get('check_card_fraud_success', True):
-        final_status = "Order Rejected. " + fraud_result2.get('check_card_fraud_reason', "Credit card fraud check failed.")
-        return jsonify({
-            "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}
-        }), 400
-    updated_fraud_clock = fraud_result2['check_card_fraud']
-    log_tools.debug(f"[Orchestrator] Updated clock after Fraud events: {updated_fraud_clock}")
-    
-    # ----- Step 4: Execute Suggestions Event -----
-    sug_result = {}
-    call_generate_suggestions(order_id, updated_fraud_clock, request_data, sug_result)
-    if not sug_result.get('generate_suggestions_success', True):
-        final_status = "Order Rejected. " + sug_result.get('generate_suggestions_reason', "Suggestions generation failed.")
-        return jsonify({
-            "orderId": order_id,
-            "status": final_status,
-            "suggestedBooks": [],
-            
-            "error": {"message": final_status}
-        }), 400
-    final_suggestions = sug_result['generate_suggestions']['books']
-    final_clock = sug_result['generate_suggestions']['clock']
-    log_tools.debug(f"[Orchestrator] Final vector clock from Suggestions: {final_clock}")
-    
-    # ----- Step 5: Enqueue the Order -----
-    final_status = "Order Placed Successfully."
-    enqueue_result = {}
-    enqueue_thread = threading.Thread(target=call_enqueue_order, args=(order_id, request_data, enqueue_result))
-    log_tools.debug("[Orchestrator] Starting enqueue thread.")
-    enqueue_thread.start()
-    enqueue_thread.join()
-    log_tools.debug(f"[Orchestrator] Enqueue result: {enqueue_result}")
-    
-    # ----- Step 7: Build the Final JSON Response -----
-    response_json = {
-        "orderId": order_id,
-        "status": final_status,
-        "suggestedBooks": final_suggestions,  # Always return an array
-        "finalVectorClock": final_clock,
-        "enqueueSuccess": enqueue_result.get('enqueue', None),
-        "enqueueMessage": enqueue_result.get('enqueue_msg', "")
-    }
-    return jsonify(response_json)
+            "status": "Order Placed Successfully.",
+            "suggestedBooks": final_suggestions,
+            "finalVectorClock": final_clock,
+            "enqueueSuccess": enqueue_result.get('enqueue', None),
+            "enqueueMessage": enqueue_result.get('enqueue_msg', "")
+        }
+        span.set_attribute("response.status", "Order Placed Successfully.")
+        return jsonify(response_json)
 
 if __name__ == '__main__':
     log_tools.info("[Orchestrator] Starting...")
