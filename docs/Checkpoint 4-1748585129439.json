@@ -153,7 +153,7 @@
           "useBackend": false
         }
       ],
-      "title": "Fauds passed",
+      "title": "Frauds passed",
       "type": "timeseries"
     },
     {
@@ -441,5 +441,5 @@
   "timezone": "browser",
   "title": "Checkpoint 4",
   "uid": "3d25decc-1539-4112-ae41-011b520c7b25",
-  "version": 3
+  "version": 4
 }
