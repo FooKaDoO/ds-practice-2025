@@ -20,6 +20,60 @@ import log_tools
 cached_orders = {}      # e.g., { orderId: orderDataJson }
 vector_clocks = {}      # e.g., { orderId: [0, 0, 0] }  (for 3 microservices)
 
+# Grafana
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from opentelemetry import metrics
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+
+# Service name is required for most backends
+resource = Resource.create(attributes={
+    SERVICE_NAME: "transaction_verification"
+})
+
+tracerProvider = TracerProvider(resource=resource)
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint="http://observability:4318/v1/traces"))
+tracerProvider.add_span_processor(processor)
+trace.set_tracer_provider(tracerProvider)
+
+reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint="http://observability:4318/v1/metrics")
+)
+meterProvider = MeterProvider(resource=resource, metric_readers=[reader])
+metrics.set_meter_provider(meterProvider)
+
+meter = metrics.get_meter("transaction_verification")
+
+user_data_verification_counter = meter.create_counter(
+    name="verify_user_data_total",
+    unit="1",
+    description="Number of user data verifications performed"
+)
+
+card_info_verification_counter = meter.create_counter(
+    name="verify_card_info_total",
+    unit="1",
+    description="Number of card info verifications performed"
+)
+
+items_verification_counter = meter.create_counter(
+    name="verify_items_total",
+    unit="1",
+    description="Number of item verifications performed"
+)
+
+transaction_verification_counter = meter.create_counter(
+    name="verify_transaction_total",
+    unit="1",
+    description="Number of transaction verifications performed"
+)
 
 class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerificationServiceServicer):
     """
@@ -80,6 +134,8 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
                 success = False
                 reason = f"Error parsing order data: {e}"
         
+        if success:
+            items_verification_counter.add(1, {"orderId": order_id})
         response = tx_pb2.VerifyItemsResponse(success=success, reason=reason)
         response.updatedClock.extend(merged_clock)
         return response
@@ -124,6 +180,8 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
                 success = False
                 reason = f"Error parsing order data: {e}"
 
+        if success:
+            user_data_verification_counter.add(1, {"orderId": order_id})
         response = tx_pb2.VerifyUserDataResponse(success=success, reason=reason)
         response.updatedClock.extend(merged_clock)
         return response
@@ -204,6 +262,7 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
         if not success:
             log_tools.error(f"[Transaction Verification] VerifyCardInfo for order {order_id} failed: {reason}")
         else:
+            card_info_verification_counter.add(1, {"orderId": order_id})
             log_tools.info(f"[Transaction Verification] VerifyCardInfo for order {order_id} succeeded.")
 
         response = tx_pb2.VerifyCardInfoResponse(success=success, reason=reason)
@@ -241,6 +300,7 @@ class TransactionVerificationServiceServicer(tx_pb2_grpc.TransactionVerification
         
 
         # If all checks pass
+        transaction_verification_counter.add(1, {"orderId": request.orderId})
         response.valid = True
         response.reason = "Transaction is valid."
         log_tools.debug(f"[Transaction Verification] VerifyTransaction called. valid={response.valid}, reason={response.reason}")

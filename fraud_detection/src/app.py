@@ -36,6 +36,72 @@ else:
     log_tools.warn("[Fraud Service] Model not found! Train the model first.")
     model, scaler = None, None
 
+# Grafana
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from opentelemetry import metrics
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+
+# Service name is required for most backends
+resource = Resource.create(attributes={
+    SERVICE_NAME: "fraud_detection"
+})
+
+tracerProvider = TracerProvider(resource=resource)
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint="http://observability:4318/v1/traces"))
+tracerProvider.add_span_processor(processor)
+trace.set_tracer_provider(tracerProvider)
+
+reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint="http://observability:4318/v1/metrics")
+)
+meterProvider = MeterProvider(resource=resource, metric_readers=[reader])
+metrics.set_meter_provider(meterProvider)
+
+from opentelemetry.metrics import Observation
+
+meter = metrics.get_meter(f"fraud_detection")
+
+orders_passed_user_fraud = 0
+orders_passed_card_fraud = 0
+orders_passed_default_fraud = 0
+
+def passed_user_fraud_callback(options):
+    return [Observation(value=orders_passed_user_fraud, attributes={"type": "passed_user_fraud"})]
+
+def passed_card_fraud_callback(options):
+    return [Observation(value=orders_passed_card_fraud, attributes={"type": "passed_card_fraud"})]
+
+def passed_default_fraud_callback(options):
+    return [Observation(value=orders_passed_default_fraud, attributes={"type": "passed_default_fraud"})]
+
+meter.create_observable_gauge(
+    name="passed_user_fraud",
+    callbacks=[passed_user_fraud_callback],
+    unit="1",
+    description="Number of orders passed user fraud checks"
+)
+
+meter.create_observable_gauge(
+    name="passed_card_fraud",
+    callbacks=[passed_card_fraud_callback],
+    unit="1",
+    description="Number of orders passed card fraud checks"
+)
+
+meter.create_observable_gauge(
+    name="passed_default_fraud",
+    callbacks=[passed_default_fraud_callback],
+    unit="1",
+    description="Number of orders passed default fraud checks"
+)
 
 class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceServicer):
     """
@@ -75,6 +141,7 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         2. number of items (derived from repeated Item)
         3. past_fraudulent_orders (dummy set to 0 here)
         """
+        global orders_passed_default_fraud
 
         # 1Prepare a response object
         response = fraud_detection.CheckOrderResponse()
@@ -105,6 +172,9 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         # Debug logs
         log_tools.debug(f"[Fraud Service] CheckOrder => totalAmount={total_amount}, itemCount={item_count}")
         log_tools.debug(f"[Fraud Service] Fraud result => isFraud={is_fraud}, reason={response.reason}")
+        
+        if not response.isFraud:
+            orders_passed_default_fraud += 1
 
         return response
     
@@ -114,6 +184,8 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         Event (d): Check user data for fraud.
         Merges the incoming vector clock and increments Fraud's slot (index 1).
         """
+        global orders_passed_user_fraud
+
         order_id = request.orderId
         incoming_clock = list(request.vectorClock) if request.vectorClock else [0, 0, 0]
         # Merge with local clock for this order if exists; for simplicity, we assume local clock is the one from initialization.
@@ -131,6 +203,9 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         response.success = True
         response.reason = "User data appears normal"
         response.updatedClock.extend(merged_clock)
+
+        if response.success:
+            orders_passed_user_fraud += 1
         return response
 
     @log_tools.log_decorator("Fraud Service")
@@ -139,6 +214,8 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         Event (e): Check credit card data for fraud.
         Merges the incoming vector clock and increments Fraud's slot (index 1) again.
         """
+        global orders_passed_card_fraud
+        
         order_id = request.orderId
         incoming_clock = list(request.vectorClock) if request.vectorClock else [0, 0, 0]
         local_clock = vector_clocks.get(order_id, [0, 0, 0])
@@ -154,6 +231,9 @@ class FraudDetectionServiceServicer(fraud_detection_grpc.FraudDetectionServiceSe
         response.success = True
         response.reason = "Credit card data appears normal"
         response.updatedClock.extend(merged_clock)
+
+        if response.success:
+            orders_passed_card_fraud += 1
         return response
 
 def serve():

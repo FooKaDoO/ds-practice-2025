@@ -26,15 +26,62 @@ BACKUPS      = [addr.strip() for addr in BACKUP_ADDRS.split(',') if addr.strip()
 _store      = {}
 _store_lock = threading.Lock()
 
+# Grafana
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from opentelemetry import metrics
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+
+# Service name is required for most backends
+resource = Resource.create(attributes={
+    SERVICE_NAME: f"books_{REPLICA_ID}"
+})
+
+tracerProvider = TracerProvider(resource=resource)
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint="http://observability:4318/v1/traces"))
+tracerProvider.add_span_processor(processor)
+trace.set_tracer_provider(tracerProvider)
+
+reader = PeriodicExportingMetricReader(
+    OTLPMetricExporter(endpoint="http://observability:4318/v1/metrics")
+)
+meterProvider = MeterProvider(resource=resource, metric_readers=[reader])
+metrics.set_meter_provider(meterProvider)
+
+tracer = trace.get_tracer(f"books_{REPLICA_ID}")
+meter = metrics.get_meter(f"books_{REPLICA_ID}")
+
+stock_counters = {}
+
+def set_stock_meter(name, value):
+    name = name.lower().replace(" ", "_")
+    _stock_counter = stock_counters.get(name)
+    if _stock_counter is None:
+        _stock_counter = meter.create_up_down_counter(f"stock.{name}", unit="1", description=f"Stock for {name}")
+        stock_counters[name] = _stock_counter
+    _stock_counter.add(value, {"stock.title": name})
+
 class BooksDatabaseServicer(books_pb2_grpc.BooksDatabaseServicer):
+    @tracer.start_as_current_span("BooksDB:Read")
     def Read(self, request, context):
         with _store_lock:
             stock = _store.get(request.title, 0)
+        set_stock_meter(request.title, 0)
         return books_pb2.ReadResponse(stock=stock)
 
+    @tracer.start_as_current_span("BooksDB:Write")
     def Write(self, request, context):
         with _store_lock:
+            old_stock = _store.get(request.title, 0)
             _store[request.title] = request.new_stock
+            set_stock_meter(request.title, old_stock - request.new_stock)
         return books_pb2.WriteResponse(success=True)
 
 class PrimaryReplica(BooksDatabaseServicer):
@@ -43,10 +90,12 @@ class PrimaryReplica(BooksDatabaseServicer):
         self.backups = backup_stubs
         self._tentative  = {}
 
+    @tracer.start_as_current_span("BooksDB:Primary:Read")
     @log_tools.log_decorator("BooksDB:Primary")
     def Write(self, request, context):
         # apply locally
         with _store_lock:
+            old_stock = _store.get(request.title, 0)
             _store[request.title] = request.new_stock
 
         # replicate with acknowledgments and retries
@@ -64,19 +113,27 @@ class PrimaryReplica(BooksDatabaseServicer):
             else:
                 log_tools.error("BooksDB: failed to replicate to a backup after 3 attempts")
 
+        final_result = True
         if acks < required_acks:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("Could not replicate to all backups")
-            return books_pb2.WriteResponse(success=False)
+            with _store_lock:
+                _store[request.title] = old_stock
+            final_result = False
+        
+        with _store_lock:
+            set_stock_meter(request.title, old_stock - _store.get(request.title, 0))
+        
+        return books_pb2.WriteResponse(success=final_result)
 
-        return books_pb2.WriteResponse(success=True)
-
+    @tracer.start_as_current_span("BooksDB:Primary:Write")
     @log_tools.log_decorator("BooksDB:Primary")
     def DecrementStock(self, request, context):
         # atomic check-and-decrement
         with _store_lock:
             curr = _store.get(request.title, 0)
             if curr < request.amount:
+                set_stock_meter(request.title, 0)
                 return books_pb2.WriteResponse(success=False)
             new = curr - request.amount
             _store[request.title] = new
@@ -97,26 +154,34 @@ class PrimaryReplica(BooksDatabaseServicer):
             else:
                 log_tools.error("BooksDB: failed to replicate decrement to a backup after 3 attempts")
 
+        final_result = True
         if acks < required_acks:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("Could not replicate decrement to all backups")
-            return books_pb2.WriteResponse(success=False)
+            final_result = False
+        
+        with _store_lock:
+            set_stock_meter(request.title, curr - _store.get(request.title, 0))
 
-        return books_pb2.WriteResponse(success=True)
+        return books_pb2.WriteResponse(success=final_result)
     
+    @tracer.start_as_current_span("BooksDB:Primary:PrepareDecrement")
     @log_tools.log_decorator("BooksDB:Primary")
     def PrepareDecrement(self, request, context):
         with _store_lock:
             curr = _store.get(request.title, 0)
             if curr < request.amount:
+                set_stock_meter(request.title, 0)
                 return books_pb2.WriteResponse(success=False)
             # stage the tentative new stock, but don’t apply it yet
             self._tentative[request.title] = curr - request.amount
         return books_pb2.WriteResponse(success=True)
 
     # 2PC Phase-2a: commit
+    @tracer.start_as_current_span("BooksDB:Primary:CommitDecrement")
     @log_tools.log_decorator("BooksDB:Primary")
     def CommitDecrement(self, request, context):
+        old = _store.get(request.title, 0)
         new = self._tentative.pop(request.title, None)
         if new is None:
             return books_pb2.WriteResponse(success=False)
@@ -127,9 +192,12 @@ class PrimaryReplica(BooksDatabaseServicer):
         wr = books_pb2.WriteRequest(title=request.title, new_stock=new)
         for stub in self.backups:
             stub.Write(wr)
+        with _store_lock:
+            set_stock_meter(request.title, old - _store.get(request.title, 0))
         return books_pb2.WriteResponse(success=True)
 
     # 2PC Phase-2b: abort
+    @tracer.start_as_current_span("BooksDB:Primary:AbortDecrement")
     @log_tools.log_decorator("BooksDB:Primary")
     def AbortDecrement(self, request, context):
         # drop any staged change
@@ -138,17 +206,22 @@ class PrimaryReplica(BooksDatabaseServicer):
     
 
 class BackupReplica(BooksDatabaseServicer):
+    @tracer.start_as_current_span("BooksDB:Backup:Write")
     @log_tools.log_decorator("BooksDB:Backup")
     def Write(self, request, context):
         with _store_lock:
+            old_stock = _store.get(request.title, 0)
             _store[request.title] = request.new_stock
+            set_stock_meter(request.title, old_stock - _store.get(request.title, 0))
         return books_pb2.WriteResponse(success=True)
     
+    @tracer.start_as_current_span("BooksDB:Backup:CommitDecrement")
     def CommitDecrement(self, request, context):
         # On a commit we just mirror the primary’s Write
         # (request.new_stock isn’t actually here—so primary pushes via Write)
         return books_pb2.WriteResponse(success=True)
     
+    @tracer.start_as_current_span("BooksDB:Backup:AbortDecrement")
     def AbortDecrement(self, request, context):
         # nothing staged on backups, so nothing to undo
         return books_pb2.WriteResponse(success=True)
